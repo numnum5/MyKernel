@@ -4,6 +4,8 @@
 #include "x86_64/interrupts.h"
 #include "x86_64/pit.h"
 #include "x86_64/memory.h"
+#include "x86_64/list.h"
+#include "x86_64/paging.h"
 // #include "x86_64/multiboot.h"
 
 #define KEY_CODE_A 0x1E
@@ -80,7 +82,6 @@ void handle_input(struct KeyboardEvent event) {
 
 #define IDT_IRQ0_TIMER 0x20
 #define IDT_IRQ1_KEYBOARD 0x21
-
 #define IDT_GATE_PRESENT (1 << 7)
 #define IDT_GATE_DPL0 (0b00 << 5)
 #define IDT_GATE_DPL1 (0b01 << 5)
@@ -88,9 +89,9 @@ void handle_input(struct KeyboardEvent event) {
 #define IDT_GATE_DPL3 (0b11 << 5)
 #define IDT_GATE_TYPE_INTERRUPT 0xE
 #define IDT_ENTRY_TYPE_INTERRUPT (IDT_GATE_PRESENT | IDT_GATE_DPL0 | IDT_GATE_TYPE_INTERRUPT)
-
-
 #define VIRT_BASE 0xffffffff80000000
+
+
 
 struct multiboot_tag {
     uint32_t type;
@@ -127,11 +128,66 @@ uint64_t get_cr3() {
 extern char __kernel_heap_start;
 extern char __kernel_heap_end;
 
+
+// extern uint8_t ucHeap;
+extern uint64_t page_table_l4;
 uintptr_t kernel_start = (uintptr_t)&__kernel_heap_start;
 uintptr_t kernel_end   = (uintptr_t)&__kernel_heap_end;
-
+// uintptr_t t   = (uintptr_t)&page_table_l4;
 
 void parse_mmap(struct multiboot_tag_mmap *mmap_tag);
+
+
+MemoryRegion * memoryRegions = NULL;
+
+uint64_t get_l4_page_table(void)
+{
+    uint64_t cr3;
+    asm volatile ("mov %%cr3, %0" : "=r"(cr3));
+    return cr3 & 0x000FFFFFFFFFF000ULL;
+}
+
+#define PAGE_PRESENT  (1ULL << 0)
+#define PAGE_HUGE     (1ULL << 7)
+#define ADDRESS_MASK  0x000FFFFFFFFFF000ULL 
+
+typedef enum {
+    PAGE_SIZE_4KB,
+    PAGE_SIZE_2MB,
+    PAGE_SIZE_1GB,
+    PAGE_NOT_PRESENT
+} page_info_t;
+
+page_info_t get_page_size(uint64_t pml4_phys, uint64_t virt_addr) {
+    // 1. Extract indices for each level from the virtual address
+    uint64_t pml4_idx = (virt_addr >> 39) & 0x1FF;
+    uint64_t pdpt_idx = (virt_addr >> 30) & 0x1FF;
+    uint64_t pd_idx   = (virt_addr >> 21) & 0x1FF;
+    // (pt_idx is at >> 12, but we only need it if it's not a huge page)
+
+    // 2. Access PML4 (Level 4)
+    uint64_t* pml4 = (uint64_t*)pml4_phys;
+    if (!(pml4[pml4_idx] & PAGE_PRESENT)) return PAGE_NOT_PRESENT;
+
+    // 3. Access PDPT (Level 3)
+    uint64_t* pdpt = (uint64_t*)(pml4[pml4_idx] & ADDRESS_MASK);
+    if (!(pdpt[pdpt_idx] & PAGE_PRESENT)) return PAGE_NOT_PRESENT;
+    
+    // Check for 1GB Huge Page at Level 3
+    if (pdpt[pdpt_idx] & PAGE_HUGE) return PAGE_SIZE_1GB;
+
+    // 4. Access PD (Level 2)
+    uint64_t* pd = (uint64_t*)(pdpt[pdpt_idx] & ADDRESS_MASK);
+    if (!(pd[pd_idx] & PAGE_PRESENT)) return PAGE_NOT_PRESENT;
+
+    // Check for 2MB Huge Page at Level 2
+    if (pd[pd_idx] & PAGE_HUGE) return PAGE_SIZE_2MB;
+
+    // 5. If we reached here and it's present, it's a standard 4KB page
+    return PAGE_SIZE_4KB;
+}
+
+
 void kernel_main(uint32_t magic, void * addr) 
 {
 // void kernel_main() {
@@ -139,85 +195,97 @@ void kernel_main(uint32_t magic, void * addr)
     print_clear();
     print_set_color(PRINT_COLOR_YELLOW, PRINT_COLOR_BLACK);
     print_str("Welcome to our 64-bit kernel!\n");
-    print_str("\nSeconds: ");
-    print_str("\nSeconds: ");
-    print_uint64_hex(IDT_ENTRY_TYPE_INTERRUPT);
-    print_str("\nWelcome to our 64-bit kernel!\n");
+    uint64_t  pml4 = get_l4_page_table();
+    // print_uint64_hex(value);
+
+    // print_char('\n');
 
     // pit_init();
     // idt_initv2();
 
-    print_uint64_hex(kernel_start);
 
-    print_char('\n');
-print_uint64_hex(kernel_end);
+    // prvHeapInit();
 
+    // MemoryRegion * ptr = pvPortMalloc(sizeof(MemoryRegion));
 
-    uint64_t heap_size = kernel_end - kernel_start;
-
-    print_char('\n');
-print_uint64_hex(heap_size);
-
-    heap_init(kernel_start, heap_size);
+    // ptr->addr = 
+    // print_memory_info();
+    // MemoryRegion * ptr =  (MemoryRegion *) kmalloc(sizeof(MemoryRegion));
 
 
+    // if (ptr != NULL)
+    // {
+    //     ptr->addr = 0xDEADBEEF;
+    //     ptr->size = 555;
+    //     print_char('\n');
+    //     print_uint64_hex( ptr->addr);
+    //     print_char('\n');
+    //     print_uint64_hex( ptr->size);
+    //     print_char('\n');
+    //     // print_memory_info(); 
 
-    uint64_t * ptr =  kmalloc(100);
-
-
-    if (ptr != NULL)
-    {
-            print_char('\n');
-    print_uint64_hex(ptr);
-        
-        *ptr = 0xDEADBEEF;
-        print_uint64_hex(*ptr);
-
-    }
-
-
-
+    // }
 
     
+    // uint64_t * ptr = pvPortMalloc(sizeof(uint64_t));
+
+    // (*ptr) = 0xDEADBEEF;
 
 
-    // heap_init(kernel_start)
-//         volatile uint64_t *p = (uint64_t*)0xffffffff80000000;
-//         *p = 0xdeadbeef;
-//         uint64_t value = *p;   
-
-//     // multiboot_memory_map_t * entry = (multiboot_memory_map_t *)(bootInfo->mmap_addr);
-// // addr is the physical address of the multiboot structure
-//     struct multiboot_tag *tag;
-
-//     // Loop through tags starting at addr + 8 (skipping the total_size and reserved fields)
-//     for (tag = (struct multiboot_tag *) (addr + 8);
-//          tag->type != 0; // Type 0 is the end tag
-//          tag = (struct multiboot_tag *) ((uint8_t *) tag + ((tag->size + 7) & ~7))) 
-//     {
-//         // Type 6 is the Memory Map tag
-//         if (tag->type == 6) {
-//             struct multiboot_tag_mmap *mmap = (struct multiboot_tag_mmap *) tag;
-//             parse_mmap(mmap);
-
-//         }
-//     }
+    // uint64_t phys = ((uint64_t) ptr) - VIRT_BASE;
 
 
+    // uint64_t v = *((uint64_t *) phys);
+    //     print_str(" \n phys \n:");
+    //     print_uint64_hex(v);
+    //     print_char('\n');
 
-    // uint64_t add = get_cr3();
+    uint64_t * ptr = pvPortMalloc(sizeof(uint64_t));
+    page_info_t value = get_page_size(pml4, (uint64_t) ptr);
+    uint64_t page_size = 0x1000;
 
-    // print_char('\n');
-    // print_uint64_hex(add);
-    // printf (" size = 0x%x, base_addr = 0x%x%08x,"
-    //         " length = 0x%x%08x, type = 0x%x\n",
-    //         (unsigned) mmap->size,
-    //         (unsigned) (mmap->addr >> 32),
-    //         (unsigned) (mmap->addr & 0xffffffff),
-    //         (unsigned) (mmap->len >> 32),
-    //         (unsigned) (mmap->len & 0xffffffff),
-    //         (unsigned) mmap->type);
-//  print_uint64_dec(entry->type);
+    switch (value)
+    {
+        case PAGE_SIZE_4KB:
+            print_str("4kb\n");
+            break;
+        case PAGE_SIZE_2MB:
+            print_str("2mb\n");
+            page_size = 0x200000;
+            break;
+        case PAGE_SIZE_1GB:
+            print_str("1gb\n");
+            break;
+        case PAGE_NOT_PRESENT:
+            print_str("not present\n");
+            break;
+    }
+    //addr is the physical address of the multiboot structure
+    struct multiboot_tag *tag;
+//
+   // Loop through tags starting at addr + 8 (skipping the total_size and reserved fields)
+    for (tag = (struct multiboot_tag *) (addr + 8);
+         tag->type != 0; // Type 0 is the end tag
+         tag = (struct multiboot_tag *) ((uint8_t *) tag + ((tag->size + 7) & ~7))) 
+    {
+        // Type 6 is the Memory Map tag
+        if (tag->type == 6) {
+            struct multiboot_tag_mmap *mmap = (struct multiboot_tag_mmap *) tag;
+            parse_mmap(mmap);
+
+        }
+    }
+
+    (void)pmm_init();
+
+    // each frame is mapped to a valid physical address 
+    // uint64_t * frame = pmm_alloc_frame();
+
+    // print_str("\n FRAME: \n");
+	// print_uint64_hex(frame);
+	// print_char('\n');
+// printNodes(memoryRegions);
+
 
     // keyboard_init();
     // keyboard_set_handler(handle_input);
@@ -237,10 +305,14 @@ print_uint64_hex(heap_size);
     //     prev_seconds = seconds;
     // }
     
-    print_str(" - Seconds loop disabled.\n");
-    
+    // print_str(" - Seconds loop disabled.\n");
+
+    vPortFree(ptr);
+
     while (1);
 }
+
+
 
 
 
@@ -257,14 +329,30 @@ void parse_mmap(struct multiboot_tag_mmap *mmap_tag) {
         if (entry->type == MULTIBOOT_MEMORY_AVAILABLE) {
             // This is the RAM you can use for your Page Frame Allocator
             // printf("Available RAM: Start: 0x%llx, Length: 0x%llx\n", entry->addr, entry->len);
-            print_str("\ntype: ");
-            print_uint64_dec(entry->type);
-            print_str("\nsize: ");
-            print_uint64_dec(entry->len);
-            print_str("\naddr: ");
-            print_uint64_hex(entry->addr);
-            print_str("\n ");
+
+            MemoryRegion * region = pvPortMalloc(sizeof(MemoryRegion));
+
+            region->addr = entry->addr;
+            region->size = entry->len;
+            region->type = entry->type;
+
+            push_back(&memoryRegions, region);
+
+            // print_str("\ntype: ");
+            // print_uint64_dec(entry->type);
+            // print_str("\nsize: ");
+            // print_uint64_dec(entry->len);
+            // print_str("\naddr: ");
+            // print_uint64_hex( (uint64_t) entry->addr + VIRT_BASE);
+            // print_str("\n ");
         } else {
+            MemoryRegion * region = pvPortMalloc(sizeof(MemoryRegion));
+
+            region->addr = entry->addr;
+            region->size = entry->len;
+            region->type = entry->type;
+
+            push_back(&memoryRegions, region);
             // Reserved or ACPI memory - stay away!
         }
     }

@@ -1,6 +1,7 @@
 %define VIRT_BASE 0xffffffff80000000
 
 global start
+global page_table_l4
 extern long_mode_start
 
 section .text

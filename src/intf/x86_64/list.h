@@ -1,8 +1,12 @@
 #include <stdint.h>
 #include <stddef.h>
 
-// Define the Node structure
-struct Node {
+typedef struct MemoryRegion {
     uint64_t size;
-    struct Node* next;
-};
+    uint64_t addr;
+    uint32_t type;
+    struct MemoryRegion* next;
+} MemoryRegion;
+
+void printNodes(MemoryRegion * head);
+void push_back(MemoryRegion ** head, struct MemoryRegion * element);
