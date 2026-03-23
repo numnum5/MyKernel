@@ -20,8 +20,8 @@ scheduler_yield:
 
 	; swap thread context
 	mov rdi, rsp
-	call scheduler_swap
-
+	call switch_context
+	
 	; load new thread
 	pop rbp
 	pop rax

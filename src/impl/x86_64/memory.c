@@ -61,7 +61,6 @@ static void prvHeapInit( void ) /* PRIVILEGED_FUNCTION */
 
     heap_start = (uint64_t) ucHeap;
 
-    
     print_str("\nuxStartAddress: \n");
     print_uint64_hex(heap_start);
 
@@ -154,8 +153,6 @@ void * pvPortMalloc( size_t xWantedSize )
     if( heapBLOCK_SIZE_IS_VALID( xWantedSize ) != 0 )
     {
 
-
-        print_str("\n test \n");
         if( ( xWantedSize > 0 ) && ( xWantedSize <= xFreeBytesRemaining ) )
         {
             /* Traverse the list from the start (lowest address) block until

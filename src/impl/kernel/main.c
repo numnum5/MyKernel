@@ -188,20 +188,31 @@ page_info_t get_page_size(uint64_t pml4_phys, uint64_t virt_addr) {
 }
 
 
+void test(void)
+{
+
+}
+
+void test2(void)
+{
+    
+}
+
 void kernel_main(uint32_t magic, void * addr) 
 {
-// void kernel_main() {
-
     print_clear();
     print_set_color(PRINT_COLOR_YELLOW, PRINT_COLOR_BLACK);
     print_str("Welcome to our 64-bit kernel!\n");
     uint64_t  pml4 = get_l4_page_table();
-    // print_uint64_hex(value);
 
-    // print_char('\n');
+    pit_init();
+    idt_initv2();
+    scheduler_init();
 
-    // pit_init();
-    // idt_initv2();
+    create_thread(test, 10000);
+    create_thread(test2, 10000);
+
+    start_scheduler();
 
 
     // prvHeapInit();
@@ -240,43 +251,43 @@ void kernel_main(uint32_t magic, void * addr)
     //     print_uint64_hex(v);
     //     print_char('\n');
 
-    uint64_t * ptr = pvPortMalloc(sizeof(uint64_t));
-    page_info_t value = get_page_size(pml4, (uint64_t) ptr);
-    uint64_t page_size = 0x1000;
+//     uint64_t * ptr = pvPortMalloc(sizeof(uint64_t));
+//     page_info_t value = get_page_size(pml4, (uint64_t) ptr);
+//     uint64_t page_size = 0x1000;
 
-    switch (value)
-    {
-        case PAGE_SIZE_4KB:
-            print_str("4kb\n");
-            break;
-        case PAGE_SIZE_2MB:
-            print_str("2mb\n");
-            page_size = 0x200000;
-            break;
-        case PAGE_SIZE_1GB:
-            print_str("1gb\n");
-            break;
-        case PAGE_NOT_PRESENT:
-            print_str("not present\n");
-            break;
-    }
-    //addr is the physical address of the multiboot structure
-    struct multiboot_tag *tag;
-//
-   // Loop through tags starting at addr + 8 (skipping the total_size and reserved fields)
-    for (tag = (struct multiboot_tag *) (addr + 8);
-         tag->type != 0; // Type 0 is the end tag
-         tag = (struct multiboot_tag *) ((uint8_t *) tag + ((tag->size + 7) & ~7))) 
-    {
-        // Type 6 is the Memory Map tag
-        if (tag->type == 6) {
-            struct multiboot_tag_mmap *mmap = (struct multiboot_tag_mmap *) tag;
-            parse_mmap(mmap);
+//     switch (value)
+//     {
+//         case PAGE_SIZE_4KB:
+//             print_str("4kb\n");
+//             break;
+//         case PAGE_SIZE_2MB:
+//             print_str("2mb\n");
+//             page_size = 0x200000;
+//             break;
+//         case PAGE_SIZE_1GB:
+//             print_str("1gb\n");
+//             break;
+//         case PAGE_NOT_PRESENT:
+//             print_str("not present\n");
+//             break;
+//     }
+//     //addr is the physical address of the multiboot structure
+//     struct multiboot_tag *tag;
+// //
+//    // Loop through tags starting at addr + 8 (skipping the total_size and reserved fields)
+//     for (tag = (struct multiboot_tag *) (addr + 8);
+//          tag->type != 0; // Type 0 is the end tag
+//          tag = (struct multiboot_tag *) ((uint8_t *) tag + ((tag->size + 7) & ~7))) 
+//     {
+//         // Type 6 is the Memory Map tag
+//         if (tag->type == 6) {
+//             struct multiboot_tag_mmap *mmap = (struct multiboot_tag_mmap *) tag;
+//             parse_mmap(mmap);
 
-        }
-    }
+//         }
+//     }
 
-    (void)pmm_init();
+//     (void)pmm_init();
 
     // each frame is mapped to a valid physical address 
     // uint64_t * frame = pmm_alloc_frame();
@@ -307,7 +318,7 @@ void kernel_main(uint32_t magic, void * addr)
     
     // print_str(" - Seconds loop disabled.\n");
 
-    vPortFree(ptr);
+    // vPortFree(ptr);
 
     while (1);
 }

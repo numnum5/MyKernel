@@ -32,7 +32,7 @@ typedef struct {
 
 
 static uint64_t * bitmap;
-uint64_t get_l4_page_table(void)
+uint64_t get_l4_page_table2(void)
 {
     uint64_t cr3;
     asm volatile ("mov %%cr3, %0" : "=r"(cr3));
@@ -41,7 +41,7 @@ uint64_t get_l4_page_table(void)
 
 uint64_t *get_pml4_virt(void)
 {
-    uint64_t phys = get_l4_page_table();
+    uint64_t phys = get_l4_page_table2();
     return (uint64_t*)PHYS_TO_VIRT(phys);
 }
 
