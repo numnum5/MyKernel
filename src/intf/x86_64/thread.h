@@ -38,6 +38,11 @@ typedef enum
 typedef struct 
 {
     uint8_t runtime_level;
+
+    /** How much the thread has spent using the CPU. */
+    uint64_t runtime;
+    /** How long the thread can run before get demoted in level. */
+    uint64_t runtime_duration;
     uint64_t sleep_until;
     uint64_t pid;
     Status status;

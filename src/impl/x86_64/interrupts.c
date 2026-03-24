@@ -7,7 +7,7 @@
 #include "print.h"
 #define MLFQ_NLEVELS          5
 #define MLFQ_RESET_PERIOD     10000000       
-#define MLFQ_LEVEL_RUNTIME(x) ((x) + 1) * 100000 
+#define MLFQ_LEVEL_RUNTIME(x) ((x) + 1) * 2 
 
 queue * threads;
 queue * sleeping_threads;
@@ -81,7 +81,13 @@ Thread * schedule()
 
 
 
+typedef struct {
+    queue queues[MLFQ_NLEVELS];
+} MLFQ;
 
+static MLFQ mlfq;
+
+void mlfq_update_level(Thread * thread);
 
 void switch_context(State_t * state)
 {
@@ -92,13 +98,29 @@ void switch_context(State_t * state)
     {
         pit_ticks = 0;
 
-        print_thread(current_thread);
+        // print_thread(current_thread);
 
         memcpy(&(current_thread->state), state, sizeof(State_t));
-        
-        enqueue(threads, current_thread);
+    
+        mlfq_update_level(current_thread);
 
-        Thread * next_thread  = dequeue(threads);
+        Thread * nextThread = NULL;
+
+        for(uint8_t i = 0; i < MLFQ_NLEVELS; i++)
+        {
+            queue * current_queue = &mlfq.queues[i];
+            Thread * t = dequeue(current_queue);
+
+            if (t != NULL)
+            {
+                nextThread = t;
+                break;
+            }
+        }
+
+        enqueue(&mlfq.queues[current_thread->runtime_level], current_thread);
+
+        Thread * next_thread  = dequeue(&mlfq.queues[0]);
 
         memcpy(state, &(next_thread->state), sizeof(State_t));
         
@@ -131,11 +153,9 @@ void thread_wrapper(void (*entry)(void))
 
 void start_first_task(CPU_Frame *sp)
 {
-    
-
     asm volatile (
         "mov %0, %%rsp\n\t"
-        "iretq\n\t"       // pops fake return address (task2) and jumps
+        "iretq\n\t"      
         : 
         : "r"(sp)
         : "memory"
@@ -154,16 +174,23 @@ Thread * create_thread(void (*entry)(void), uint64_t stack_size, uint64_t pid)
     thread->state.frame.rflags = 0x202; 
     thread->state.frame.cs = 0x08;
     thread->state.frame.ss = 0x10;
-    enqueue(threads, thread);
+
+
+    thread->runtime_level = 0;
+
+    thread->runtime = 0;
+
+    // If it's level 0 then run time duration is only 100ms
+    // 1 --> 200ms
+    // 2 --> 300ms ...
+    thread->runtime_duration = MLFQ_LEVEL_RUNTIME(thread->runtime_level);
+
+    enqueue(&mlfq.queues[0], thread);
     return thread;
     // enqueue(threads, thread);
 }
 
-typedef struct {
-    queue queues[MLFQ_NLEVELS];
-} MLFQ;
 
-MLFQ mlfq;
 
 void process_create(void (*entry)(void), uint64_t stack_size, uint64_t pid)
 {
@@ -185,10 +212,40 @@ void process_create(void (*entry)(void), uint64_t stack_size, uint64_t pid)
     
     thread->state.frame.ss = 0x10;
 
+    thread->runtime_level = 0;
+
+    thread->runtime = 0;
+
+    // If it's level 0 then run time duration is only 100ms
+    // 1 --> 200ms
+    // 2 --> 300ms ...
+    thread->runtime_duration = MLFQ_LEVEL_RUNTIME(thread->runtime_level);
+
     enqueue(&mlfq.queues[0], thread);
-    // return thread;
-    // enqueue(threads, thread);
 }
+
+
+void mlfq_update_level(Thread * thread)
+{
+    // run time is essentially the same as systick
+    thread->runtime++;
+
+    if (thread->runtime == thread->runtime_duration)
+    {
+        thread->runtime = 0;
+
+        if (thread->runtime_level < MLFQ_NLEVELS - 1)
+        {
+            thread->runtime_level++;
+        }
+        
+        thread->runtime_duration = MLFQ_LEVEL_RUNTIME(thread->runtime_level);
+
+        printf("Id %x, Runtime: %d, duration: %d, level: %d\n", 
+            thread->pid, thread->runtime, thread->runtime_duration, thread->runtime_level);
+    }
+}
+
 
 void scheduler_init(void)
 {
@@ -208,14 +265,14 @@ void scheduler_init(void)
 
 void sleep(uint64_t ms)
 {
-    current_thread->sleep_until = systick + ms;
+    // current_thread->sleep_until = systick + ms;
     current_thread->status = SLEEPING;
     scheduler_yield();
 }
 
 void start_scheduler(void)
 {
-    Thread * thread = dequeue(threads);
+    Thread * thread = dequeue(&mlfq.queues[0]);
     if (thread != NULL)
     {
         current_thread = thread;
