@@ -1,4 +1,5 @@
 #include "print.h"
+#include <stdarg.h>
 
 const static size_t NUM_COLS = 80;
 const static size_t NUM_ROWS = 25;
@@ -98,6 +99,76 @@ void print_uint64_dec(uint64_t value) {
     
     while (i-- > 0) {
         print_char(buffer[i]);
+    }
+}
+
+
+
+
+void printf(const char* format, ...) {
+    va_list args;
+    va_start(args, format);
+
+    for (int i = 0; format[i] != '\0'; i++) {
+        if (format[i] == '%') {
+            i++;
+            switch (format[i]) {
+                case 's': {
+                    char* s = va_arg(args, char*);
+                    while (*s) print_char(*s++);
+                    break;
+                }
+                case 'd': {
+                    int d = va_arg(args, int);
+                    print_uint64_dec(d); // You'll need a helper to convert int to string
+                    break;
+                }
+                case 'x': {
+                    uint64_t x = va_arg(args, uint64_t);
+                    print_uint64_hex(x); // Crucial for debugging addresses!
+                    break;
+                }
+                default:
+                    print_char('%');
+                    print_char(format[i]);
+                    break;
+            }
+        } else {
+            print_char(format[i]);
+        }
+    }
+
+    va_end(args);
+}
+
+void print_int(int64_t n) {
+    if (n == 0) {
+        print_char('0');
+        return;
+    }
+
+    if (n < 0) {
+        print_char('-');
+        // Handle INT64_MIN edge case where -n overflows
+        if (n == -9223372036854775808LL) {
+            print_str("9223372036854775808");
+            return;
+        }
+        n = -n;
+    }
+
+    char buffer[32]; // Enough for a 64-bit integer
+    int i = 0;
+
+    // Extract digits into the buffer
+    while (n > 0) {
+        buffer[i++] = (n % 10) + '0'; // Convert digit to ASCII
+        n /= 10;
+    }
+
+    // Print the buffer in reverse
+    while (i > 0) {
+        print_char(buffer[--i]);
     }
 }
 

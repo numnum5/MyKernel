@@ -79,7 +79,10 @@ scheduler_yield:
 
 	; swap thread context
 	mov rdi, rsp
+
 	call switch_context
+	
+	; mov rsp, rax
 	; load new thread
 	pop rbp
 	pop rax
@@ -99,3 +102,9 @@ scheduler_yield:
 	
 	; popped by cpu: rip, cs, rflags, rsp, ss
 	iretq
+
+; global start_first_process
+
+; start_first_process:
+;     mov rsp, [first_proc_tf]
+;     iretq

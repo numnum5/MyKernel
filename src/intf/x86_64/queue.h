@@ -15,6 +15,7 @@ typedef struct Node
 // Define the structure for the queue
 typedef struct Queue
 {
+    uint64_t size;
     node *front;
     node *rear;
 } queue;

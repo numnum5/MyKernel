@@ -2,6 +2,11 @@
 
 global start
 global page_table_l4
+global stack_bottom
+global stack_top
+global stack_tss_bottom
+global stack_tss_top
+global gdt64
 extern long_mode_start
 
 section .text
@@ -145,17 +150,32 @@ page_table_l3:
 page_table_l2:
 	resb 4096
 stack_bottom:
-	resb 4096 * 4
+	resb 4096 * 8
 stack_top:
+stack_tss_bottom:
+	resb 4096
+stack_tss_top:
 
 section .rodata
 gdt64:
-	dq 0 ; zero entry
+	dq 0												; Zero entry
 .code_segment: equ $ - gdt64
-	dq (1 << 43) | (1 << 44) | (1 << 47) | (1 << 53) ; code segment
-.pointer:
-	dw $ - gdt64 - 1 ; length
-	dq gdt64 - VIRT_BASE; address
+	dq (1 << 43) | (1 << 44) | (1 << 47) | (1 << 53)	; Kernel code segment entry
+	; executable, code/data type, present, 64-bit
+.kdata: equ $ - gdt64
+	dq (1 << 41) | (1 << 44) | (1 << 47) | (1 << 53)	; Kernel data segment entry
+	; writeable, code/data type, present, 64-bit
+.ucode: equ $ - gdt64
+	dq (1 << 43) | (1 << 44) | (3 << 45) | (1 << 47) | (1 << 53)	; User code segment entry
+	; executable, code/data type, user mode, present, 64-bit
+.udata: equ $ - gdt64
+	dq (1 << 41) | (1 << 44) | (3 << 45) | (1 << 47) | (1 << 53)	; User data segment entry
+	; writeable, code/data type, user mode, present, 64-bit
+.tss: equ $ - gdt64
+	resb 16	; Task state segment entry (filled programmatically later in boot process)
+.pointer:					; Value used by LGDT
+	dw $ - gdt64 - 1		; Length of GDT
+	dq gdt64 - VIRT_BASE	; Address of GDT
 
 ; global long_mode_start
 extern kernel_main
@@ -174,7 +194,7 @@ long_mode_start:
 	; call kernel_main
     ; hlt 
 
-	mov ax, 0x00
+	mov ax, gdt64.kdata
 	mov ds, ax
 	mov es, ax
 	mov fs, ax

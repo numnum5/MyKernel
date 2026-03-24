@@ -2,10 +2,22 @@
 #include "x86_64/interrupts.h"
 #include "x86_64/thread.h"
 #include "x86_64/queue.h"
+#include "x86_64/thread.h"
+// #include <string.h>
 #include "print.h"
+#define MLFQ_NLEVELS          5
+#define MLFQ_RESET_PERIOD     10000000       
+#define MLFQ_LEVEL_RUNTIME(x) ((x) + 1) * 100000 
 
 queue * threads;
+queue * sleeping_threads;
 Thread * current_thread;
+
+
+
+
+
+
 
 extern void scheduler_yield(void);
 
@@ -46,61 +58,54 @@ void* memcpy(void* dest, const void* src, size_t n) {
     return dest;
 }
 
+void print_thread(Thread * thread){
+    printf("Pid: %x\n", thread->pid);
+    printf("rip: %x\n", thread->state.frame.rip);
+    printf("cs: %x\n", thread->state.frame.cs);
+    printf("cs: %x\n", thread->state.frame.ss);
+}
+
+volatile static uint64_t systick = 0;
+
+
+Thread * schedule()
+{
+    // Traverse the queue and print each element
+    Thread * thread = dequeue(threads);
+    while (thread != NULL & thread->status != SLEEPING)
+    {
+        enqueue(threads, thread);
+        thread = dequeue(threads);
+    }
+}
+
+
+
+
+
 void switch_context(State_t * state)
 {
+    out_port_B(0x20, 0x20); 
     pit_ticks++;
 
-    if (pit_ticks >= 18) {
+    if (pit_ticks >= 18) 
+    {
         pit_ticks = 0;
-        print_str("interrupt called\n");
-        print_uint64_hex(state->frame.rip);
-        print_char('\n');
 
+        print_thread(current_thread);
 
-        if (current_thread != NULL)
-        {
-            print_str("thread available\n");
-            print_uint64_hex(current_thread->pid);
-            print_char('\n');
+        memcpy(&(current_thread->state), state, sizeof(State_t));
+        
+        enqueue(threads, current_thread);
 
-            memcpy(&(current_thread->state), state, sizeof(State_t));
-            Thread * next_thread = dequeue(threads);
+        Thread * next_thread  = dequeue(threads);
 
-            if (next_thread != NULL){
-                print_str("next thread available\n");
-                print_uint64_dec(next_thread->pid);
-                print_char('\n');
-                
-                
-                enqueue(threads, current_thread);
-                
-                memcpy(state, &(next_thread->state), sizeof(State_t));
+        memcpy(state, &(next_thread->state), sizeof(State_t));
+        
+        current_thread = next_thread;
 
-                current_thread = next_thread;
-            }
-
-            // memcpy(state, state, sizeof(State_t));
-        }
+        systick++;
     }
-
-    out_port_B(0x20, 0x20);
-    // print_str("\n context switch\n");
-
-    // current_thread->stack_pointer = stack_ptr;
-    // Thread * next_thread = dequeue(threads);
-
-    // if (next_thread == NULL)
-    // {
-    //     return stack_ptr;
-    // }
-
-    // enqueue(threads, current_thread);
-    
-    // current_thread = next_thread;
-
-    // return current_thread->stack_pointer;
-
-    
 }
 
 void timer_interrupt_handler() {
@@ -114,45 +119,108 @@ void timer_interrupt_handler() {
 	// pic_eoi_master();
 }
 
-
-
 void thread_wrapper(void (*entry)(void))
 {
     print_str("handler\n");
+    entry();
+    // while(1);
+    
 }
 
-void create_thread(void (*entry)(void), uint64_t stack_size)
+
+
+void start_first_task(CPU_Frame *sp)
 {
-    static uint64_t pids = 5555;
+    
+
+    asm volatile (
+        "mov %0, %%rsp\n\t"
+        "iretq\n\t"       // pops fake return address (task2) and jumps
+        : 
+        : "r"(sp)
+        : "memory"
+    );
+}
+
+Thread * create_thread(void (*entry)(void), uint64_t stack_size, uint64_t pid)
+{
+    // static uint64_t pids = 5555;
     Thread * thread = pvPortMalloc(sizeof(Thread));
-    uint64_t * stack = pvPortMalloc(stack_size);
-	thread->pid = pids++;
-	thread->state.rdi = (uint64_t) stack;
-	thread->state.frame.rip = (uint64_t) (thread_wrapper);
-	thread->state.frame.rflags = (1<<1) | (1<<9);
-	thread->state.frame.cs = 0x08;
-	thread->state.frame.ss = 0x10;
-	thread->state.frame.rsp = (uint64_t) stack + stack_size;
+    uint8_t * stack = pvPortMalloc(stack_size);
+    thread->pid = pid;
+    uint64_t *stack_top = (uint64_t *)(stack + stack_size);
+    thread->state.frame.rip = (uint64_t) entry;
+    thread->state.frame.rsp = (uint64_t) stack_top;
+    thread->state.frame.rflags = 0x202; 
+    thread->state.frame.cs = 0x08;
+    thread->state.frame.ss = 0x10;
     enqueue(threads, thread);
+    return thread;
+    // enqueue(threads, thread);
+}
+
+typedef struct {
+    queue queues[MLFQ_NLEVELS];
+} MLFQ;
+
+MLFQ mlfq;
+
+void process_create(void (*entry)(void), uint64_t stack_size, uint64_t pid)
+{
+    // static uint64_t pids = 5555;
+    Thread * thread = pvPortMalloc(sizeof(Thread));
+    uint8_t * stack = pvPortMalloc(stack_size);
+    
+    thread->pid = pid;
+    
+    uint64_t *stack_top = (uint64_t *)(stack + stack_size);
+    
+    thread->state.frame.rip = (uint64_t) entry;
+    
+    thread->state.frame.rsp = (uint64_t) stack_top;
+    
+    thread->state.frame.rflags = 0x202; 
+    
+    thread->state.frame.cs = 0x08;
+    
+    thread->state.frame.ss = 0x10;
+
+    enqueue(&mlfq.queues[0], thread);
+    // return thread;
+    // enqueue(threads, thread);
 }
 
 void scheduler_init(void)
 {
     threads = createQueue();
-    Thread * main_thread = pvPortMalloc(sizeof(Thread));
-    main_thread->pid = 0xDEADBEEF;
-    main_thread->priority = 1;
-    enqueue(threads, main_thread);
+    for (uint8_t i = 0; i < MLFQ_NLEVELS; i++)
+    {
+        mlfq.queues[i].front = NULL;
+        mlfq.queues[i].rear = NULL;
+    }
+    // sleeping_threads = createQueue();
+    // Thread * main_thread = pvPortMalloc(sizeof(Thread));
+    // main_thread->pid = 0xDEADBEEF;
+    // main_thread->priority = 1;
+    // enqueue(threads, main_thread);
 }
 
+
+void sleep(uint64_t ms)
+{
+    current_thread->sleep_until = systick + ms;
+    current_thread->status = SLEEPING;
+    scheduler_yield();
+}
 
 void start_scheduler(void)
 {
     Thread * thread = dequeue(threads);
-
     if (thread != NULL)
     {
         current_thread = thread;
+        current_thread->status = RUNNING;
+        start_first_task(&(current_thread->state.frame));
     }
 }
 
@@ -160,16 +228,12 @@ void idt_initv2()
 {
     out_port_B(0x20, 0x11);
     out_port_B(0xA0, 0x11);
-
     out_port_B(0x21, 0x20);
     out_port_B(0xA1, 0x28);
-
     out_port_B(0x21,0x04);
     out_port_B(0xA1,0x02);
-
     out_port_B(0x21, 0x01);
     out_port_B(0xA1, 0x01);
-
     out_port_B(0x21, 0x0);
     out_port_B(0xA1, 0x0);
 
@@ -185,10 +249,8 @@ void idt_initv2()
     asm volatile("sti");
 }
 
-
 void set_idt_gate(uint8_t vector, uint64_t isr_addr, uint16_t selector, uint8_t type) {
     struct idt_entry * entry = &idt_entries[vector];
-
     entry->offset_low = (uint16_t) (isr_addr >> 0);
     entry->selector = selector;
     entry->ist = 0;

@@ -1,14 +1,14 @@
 #pragma once
 #include <stdint.h>
-typedef struct StackFrame {
+typedef struct {
     uint64_t rip;
     uint64_t cs;
     uint64_t rflags;
     uint64_t rsp;
     uint64_t ss;
-}StackFrame_t __attribute__((packed));
+} __attribute__((packed)) CPU_Frame;
 
-typedef struct State {
+typedef struct __attribute__((packed)) {
     uint64_t rbp;
     uint64_t rax;
     uint64_t rbx;
@@ -24,8 +24,8 @@ typedef struct State {
     uint64_t r13;
     uint64_t r14;
     uint64_t r15;
-    StackFrame_t frame;
-} State_t __attribute__((packed));;
+    CPU_Frame frame;
+} State_t;
 
 typedef enum 
 {
@@ -37,6 +37,8 @@ typedef enum
 
 typedef struct 
 {
+    uint8_t runtime_level;
+    uint64_t sleep_until;
     uint64_t pid;
     Status status;
     uint8_t priority;

@@ -24,6 +24,7 @@ queue *createQueue()
     queue *newQueue = (queue *)pvPortMalloc(sizeof(queue));
     // Initialize the front and rear pointers of the queue
     newQueue->front = newQueue->rear = NULL;
+    newQueue->size = 0;
     return newQueue;
 }
 
@@ -47,6 +48,9 @@ void enqueue(queue * q, Thread * thread)
     }
     // If the queue is empty, set the front and rear
     // pointers to the new node
+
+    q->size++;
+
     if (q->rear == NULL)
     {
         q->front = q->rear = newNode;
@@ -54,6 +58,7 @@ void enqueue(queue * q, Thread * thread)
     }
     // Add the new node at the end of the queue and update
     // the rear pointer
+
     q->rear->next = newNode;
     q->rear = newNode;
 }
@@ -77,7 +82,10 @@ Thread * dequeue(queue *q)
     // Store the data of the front node and free its memory
     Thread * thread = temp->thread;
 
+    q->size--;
+
     vPortFree(temp);
+
     return thread;
 }
 

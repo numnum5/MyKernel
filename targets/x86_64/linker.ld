@@ -36,6 +36,7 @@ SECTIONS
 		*(.page_tables*)
 		*(.bss*)
 		*(.stack*)
+		
 		. = ALIGN(4K);
 		__kernel_heap_start = .;
 		*(.heap)

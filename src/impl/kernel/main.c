@@ -6,6 +6,7 @@
 #include "x86_64/memory.h"
 #include "x86_64/list.h"
 #include "x86_64/paging.h"
+#include "x86_64/tss.h"
 // #include "x86_64/multiboot.h"
 
 #define KEY_CODE_A 0x1E
@@ -190,13 +191,33 @@ page_info_t get_page_size(uint64_t pml4_phys, uint64_t virt_addr) {
 
 void test(void)
 {
+    print_str("Hello from task2!\n");
+    while (1){
+        printf("Task A is running... \n");
+        // Use a busy-wait delay so it doesn't flood the screen too fast
+        for(volatile int i = 0; i < 100000000; i++);
+    };
 
 }
 
 void test2(void)
 {
-    
+    print_str("Hello from task34!\n");
+    while (1){
+        printf("Task B is running... \n");
+        // Use a busy-wait delay so it doesn't flood the screen too fast
+        for(volatile int i = 0; i < 100000000; i++);
+    };
 }
+
+
+
+extern uint8_t stack_top[];
+extern uint8_t stack_bottom[];
+
+
+uint8_t t[200];
+
 
 void kernel_main(uint32_t magic, void * addr) 
 {
@@ -204,15 +225,55 @@ void kernel_main(uint32_t magic, void * addr)
     print_set_color(PRINT_COLOR_YELLOW, PRINT_COLOR_BLACK);
     print_str("Welcome to our 64-bit kernel!\n");
     uint64_t  pml4 = get_l4_page_table();
+    init_TSS();
+
+    // uint16_t tr_value = 0;
+    // asm volatile("str %0" : "=r"(tr_value));
+
+    // if (tr_value == 0) {
+    //     print_str("TSS NOT LOADED: Task Register is 0\n");
+    // } else {
+    //     print_str("TSS Loaded. Selector: ");
+    //     print_uint64_hex(tr_value); 
+    //     print_char('\n');
+    // }
+
+    // uint16_t cs;
+    // asm volatile("mov %%cs, %0" : "=r"(cs));
+    // uint8_t cpl = cs & 0x3;
+
+    // if (cpl == 3) {
+    // print_str("We are in user mode!\n");
+    // } else {
+    // print_str("We are in kernel mode!\n");
+    // }
+
+
+    // uint8_t* stack = pvPortMalloc(4096);
+    // uintptr_t stack_top_addr = (uintptr_t)stack + 4096 - VIRT_BASE;
+    // // Align the stack pointer itself (down to nearest 16)
+    // uintptr_t aligned_rsp = stack_top_addr - sizeof(UserFrame); 
+    // UserFrame* frame = (UserFrame*)(aligned_rsp - sizeof(UserFrame));
+
+    // frame->rip = (uint64_t)test;
+    // frame->cs  = 0x08;         // user code segment
+    // frame->rflags = 0x202;
+    // frame->rsp = stack_top_addr;
+    // frame->ss  = 0x10;  
+
+    // start_first_task(frame);
 
     pit_init();
     idt_initv2();
+        
     scheduler_init();
+    create_thread(test2,0x1000, 0xDEEDBEEF);
+    create_thread(test,0x1000, 0xABCDEFFF);
 
-    create_thread(test, 10000);
-    create_thread(test2, 10000);
 
     start_scheduler();
+
+
 
 
     // prvHeapInit();
@@ -320,7 +381,12 @@ void kernel_main(uint32_t magic, void * addr)
 
     // vPortFree(ptr);
 
-    while (1);
+    while (1)
+    {
+        printf("Task main is running... \n");
+        // Use a busy-wait delay so it doesn't flood the screen too fast
+        for(volatile int i = 0; i < 100000000; i++);
+    };
 }
 
 
