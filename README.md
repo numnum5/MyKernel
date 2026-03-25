@@ -1,4 +1,4 @@
-Microkernel OS written in C
+simple x86-64 kernel written in C
 
 
 ## Build
