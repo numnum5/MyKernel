@@ -1,4 +1,4 @@
-section .multiboot_header
+section .multiboot
 header_start:
 	; magic number
 	dd 0xe85250d6 ; multiboot2
@@ -19,6 +19,7 @@ header_start:
 	; dd 32
 	; end tag
 
+	align 8
 	dw 0
 	dw 0
 	dd 8

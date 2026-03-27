@@ -1,6 +1,6 @@
 #include "print.h"
 #include <stdarg.h>
-
+#define VIRT_BASE 0xffffffff80000000
 const static size_t NUM_COLS = 80;
 const static size_t NUM_ROWS = 25;
 
@@ -9,7 +9,7 @@ struct Char {
     uint8_t color;
 };
 
-struct Char* buffer = (struct Char*) 0xb8000;
+struct Char* buffer = (struct Char*)(0xb8000 + VIRT_BASE);
 size_t col = 0;
 size_t row = 0;
 uint8_t color = PRINT_COLOR_WHITE | PRINT_COLOR_BLACK << 4;

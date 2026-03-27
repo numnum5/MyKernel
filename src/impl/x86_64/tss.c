@@ -1,4 +1,5 @@
 #include <stdint.h>
+#include "print.h"
 extern uint8_t stack_tss_top[];
 extern uint8_t stack_tss_bottom[];
 extern uint8_t gdt64[];
@@ -36,6 +37,9 @@ typedef struct __attribute__((packed)) {
 static TSS tss = {0};
 
 void init_TSS(void) {
+
+printf("bottom tss: %x\n", (uint64_t) stack_tss_bottom);
+printf("top tss: %x\n", (uint64_t) stack_tss_top);
     uint32_t limit = sizeof(TSS);
 
     tss.rsp0 = (uint64_t) stack_tss_top;

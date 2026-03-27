@@ -4,6 +4,8 @@ global start
 global page_table_l4
 global stack_bottom
 global stack_top
+global page_table_l3
+global page_table_l2
 global stack_tss_bottom
 global stack_tss_top
 global gdt64
@@ -12,6 +14,7 @@ extern long_mode_start
 section .text
 bits 32
 start:
+	cli
 	mov esp, stack_top - VIRT_BASE
 
 		; Move magic number and pointer to arguement registers
@@ -25,7 +28,7 @@ start:
 	call enable_paging
 
 	lgdt [gdt64.pointer - VIRT_BASE]
-	jmp gdt64.code_segment:(long_mode_start - VIRT_BASE)
+	jmp gdt64.kcode:(long_mode_start - VIRT_BASE)
 
 	hlt
 
@@ -82,18 +85,21 @@ init_pages:
 	mov [page_table_l4 - VIRT_BASE], eax			; Lower-half identity map
 	mov [page_table_l4 - VIRT_BASE + 8 * 511], eax	; Higher-half identity map
 
-	; mov eax, page_table_l3
-	; or eax, 0b11 ; present, writable
-	; mov [page_table_l4], eax
-	
-
 	mov eax, page_table_l2 - VIRT_BASE
 	or eax, 0b11	; writeable, present
 	mov [page_table_l3 - VIRT_BASE], eax			; Lower-half identity map
 	mov [page_table_l3 - VIRT_BASE + 8 * 510], eax	; Higher-half identity map
-	; mov eax, page_table_l2
-	; or eax, 0b11 ; present, writable
-	; mov [page_table_l3], eax
+
+
+
+
+	; mov eax, page_table_l1 - VIRT_BASE
+	; or eax, 0b11	; writeable, present
+	; mov [page_table_l2 - VIRT_BASE], eax			; Lower-half identity map
+	; mov [page_table_l2 - VIRT_BASE + 8 * 510], eax	; Higher-half identity map
+
+
+
 
 	mov ecx, 0 ; counter
 .loop:
@@ -149,24 +155,32 @@ page_table_l3:
 	resb 4096
 page_table_l2:
 	resb 4096
+page_table_l1:
+	resb 4096
 stack_bottom:
-	resb 4096 * 8
+	resb 4096 * 10
 stack_top:
 stack_tss_bottom:
 	resb 4096
 stack_tss_top:
 
 section .rodata
+
+global ucode_selector 
+
+global udata_selector       ; Make it visible to the linker
+ucode_selector: equ gdt64.ucode ; Create a C-friendly alias
+udata_selector: equ gdt64.udata ; Create a C-friendly alias
 gdt64:
 	dq 0												; Zero entry
-.code_segment: equ $ - gdt64
+.kcode: equ $ - gdt64
 	dq (1 << 43) | (1 << 44) | (1 << 47) | (1 << 53)	; Kernel code segment entry
 	; executable, code/data type, present, 64-bit
 .kdata: equ $ - gdt64
 	dq (1 << 41) | (1 << 44) | (1 << 47) | (1 << 53)	; Kernel data segment entry
 	; writeable, code/data type, present, 64-bit
 .ucode: equ $ - gdt64
-	dq (1 << 43) | (1 << 44) | (3 << 45) | (1 << 47) | (1 << 53)	; User code segment entry
+	dq (1 << 43) | (1 << 41) | (1 << 44) | (3 << 45) | (1 << 47) | (1 << 53)	; User code segment entry
 	; executable, code/data type, user mode, present, 64-bit
 .udata: equ $ - gdt64
 	dq (1 << 41) | (1 << 44) | (3 << 45) | (1 << 47) | (1 << 53)	; User data segment entry
@@ -212,20 +226,74 @@ long_mode_start:
 
 	hlt
 
+section .text
 high_mem_entry:
 	; Reset stack pointers
 	mov rsp, stack_top
 	xor rbp, rbp
 
+	; mov rax, rsp
+	; call print_hex64
+	; COULD you make a simple code to show page table l4 is acccessbile via virt address
+; [page_table_l4],
+
 	; ; Unmap lower-half identity mapping
-	; mov rax, 0
-	; mov [page_table_l4], rax
-	; mov qword [l4_page_table + 0*8], 0
-	; mov rax, cr3
-	; mov cr3, rax
+	mov rax, 0
+	mov [page_table_l4], rax
+	mov rax, cr3
+	mov cr3, rax
+
 
 	; Finally, go to main kernel function
 	call kernel_main
 
 	hlt
 
+
+
+; -----------------------------------------------------------------------------
+; print_hex64:
+;   Input: RAX = 64-bit number to print
+;   Prints RAX as 16-character hex to VGA text buffer (0xB8000)
+;   Assumes white on black color (0x0F)
+; -----------------------------------------------------------------------------
+section .text
+bits 64
+
+print_hex64:
+    push rbx
+    push rcx
+    push rdx
+    push rsi
+    push rdi
+
+    mov rsi, 0xB8000       ; VGA buffer
+    mov rcx, 16            ; 16 hex digits
+
+print_loop:
+    mov rbx, rax           ; copy number
+    shr rbx, 60            ; get highest nibble
+    and bl, 0xF            ; isolate 4 bits
+
+    ; convert to ASCII
+    cmp bl, 10
+    jl .digit
+    add bl, 'A' - 10
+    jmp .store
+.digit:
+    add bl, '0'
+
+.store:
+    mov [rsi], bl
+    mov byte [rsi+1], 0x0F     ; color attribute
+    add rsi, 2
+
+    shl rax, 4                 ; shift left by 4 bits (next nibble)
+    loop print_loop
+
+    pop rdi
+    pop rsi
+    pop rdx
+    pop rcx
+    pop rbx
+    ret

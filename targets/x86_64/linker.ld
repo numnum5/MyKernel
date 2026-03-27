@@ -6,18 +6,14 @@ KERNEL_VIRT = 0xffffffff80000000;
 
 SECTIONS
 {
-	. = 1M;
-
-	.boot :
-    {
-        *(.multiboot)
-    }
-
+	. = KERNEL_PHYS;
 	. += KERNEL_VIRT;
 
 	.text ALIGN(4K) : AT(ADDR(.text) - KERNEL_VIRT) 
 	{
+		*(.multiboot*)
 		*(.text*)
+		
 	}
 
 	.rodata ALIGN(4K) : AT(ADDR(.rodata) - KERNEL_VIRT)
@@ -36,7 +32,6 @@ SECTIONS
 		*(.page_tables*)
 		*(.bss*)
 		*(.stack*)
-		
 		. = ALIGN(4K);
 		__kernel_heap_start = .;
 		*(.heap)

@@ -1,7 +1,7 @@
 ; extern idt_handler_keyboard
 extern timer_interrupt_handler
 extern switch_context
-
+extern default_handler
 
 global idt_load
 
@@ -54,57 +54,30 @@ idt_load:
 
 ; WRAPPED_HANDLER idt_handler_keyboard
 WRAPPED_HANDLER timer_interrupt_handler
+WRAPPED_HANDLER default_handler
 
 
+global enter_user_mode
 
-global scheduler_yield
-scheduler_yield:
-	; pushed by cpu: ss, rsp, rflags, cs, rip
-	; save current thread
-	push r15
-	push r14
-	push r13
-	push r12
-	push r11
-	push r10
-	push r9
-	push r8
-	push rdi
-	push rsi
-	push rdx
-	push rcx
-	push rbx
-	push rax
-	push rbp
+enter_user_mode:
+    ; rdi = user rip
+    ; rsi = user rsp
 
-	; swap thread context
-	mov rdi, rsp
+    cli
 
-	call switch_context
-	
-	; mov rsp, rax
-	; load new thread
-	pop rbp
-	pop rax
-	pop rbx
-	pop rcx
-	pop rdx
-	pop rsi
-	pop rdi
-	pop r8
-	pop r9
-	pop r10
-	pop r11
-	pop r12
-	pop r13
-	pop r14
-	pop r15
-	
-	; popped by cpu: rip, cs, rflags, rsp, ss
-	iretq
+    mov ax, 0x23        ; user data selector
+    mov ds, ax
+    mov es, ax
+    mov fs, ax
+    mov gs, ax
 
-; global start_first_process
+    push qword 0x23     ; SS
+    push rsi            ; RSP (user stack)
+    pushfq              ; RFLAGS
+    pop rax
+    or rax, 0x200       ; enable interrupts in user mode
+    push rax
+    push qword 0x2B     ; CS (user code)
+    push rdi            ; RIP (user entry point)
 
-; start_first_process:
-;     mov rsp, [first_proc_tf]
-;     iretq
+    iretq

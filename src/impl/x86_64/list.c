@@ -13,12 +13,15 @@ typedef struct MemoryRegion {
 } MemoryRegion;
 
 // Function to create a new node 
-static MemoryRegion * createNode(uint64_t size, uint64_t addr, uint32_t type) {
+static MemoryRegion * createNode(uint64_t size, uint64_t addr, uint32_t type) 
+{
     MemoryRegion* newNode = (MemoryRegion*) pvPortMalloc(sizeof(MemoryRegion));
+
     newNode->size = size;
     newNode->addr = addr;
     newNode->type = type;
     newNode->next = NULL;
+
     return newNode;
 }
 
@@ -31,15 +34,19 @@ void insertAtFirst(struct MemoryRegion** head, uint64_t size, uint64_t addr, uin
 
 
 
-void push_back(MemoryRegion ** head, struct MemoryRegion * element) {
+void push_back(MemoryRegion ** head, MemoryRegion * element) {
     if (*head == NULL) {
         *head = element;
         return;
     }
-    struct MemoryRegion* temp = *head;
-    while (temp->next != NULL) {
+
+    MemoryRegion* temp = *head;
+    
+    while (temp->next != NULL) 
+    {
         temp = temp->next;
     }
+
     temp->next = element;
 }
 
@@ -79,11 +86,15 @@ void insertAtPosition(MemoryRegion** head, uint64_t size, uint64_t addr, uint32_
 
 // Function to delete the first node of the singly linked list
 void deleteFromFirst(MemoryRegion** head) {
-    if (*head == NULL) {
+    if (*head == NULL) 
+    {
         return;
     }
+
     MemoryRegion* temp = *head;
+    
     *head = temp->next;
+    
     vPortFree(temp);
 }
 
@@ -93,7 +104,8 @@ void deleteFromEnd(MemoryRegion** head) {
         return;
     }
     MemoryRegion* temp = *head;
-    if (temp->next == NULL) {
+    if (temp->next == NULL) 
+    {
         vPortFree(temp);
         *head = NULL;
         return;
