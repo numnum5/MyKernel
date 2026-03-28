@@ -2,7 +2,6 @@
 ; global syscall_entry
 extern switch_context
 extern switch_context2
-extern fucklife
 global scheduler_yield
 
 
@@ -53,11 +52,7 @@ scheduler_yield:
 	; popped by cpu: rip, cs, rflags, rsp, ss
 	iretq
 
-; global start_first_process
 
-; start_first_process:
-;     mov rsp, [first_proc_tf]
-;     iretq
 extern syscall_handler
 
 ; syscall_entry:
@@ -105,47 +100,3 @@ extern syscall_handler
 
 ;     iretq
 
-
-global start_first_thread
-
-start_first_thread:
-    mov rsp, rdi            ; switch to top of user stack
-    iretq
-
-
-global jump_usermode
-extern test_user_function
-jump_usermode:
-    ; 1. Clear out the segment registers
-    ; In 64-bit mode, DS, ES, FS, GS are mostly ignored but 
-    ; should point to a valid User Data selector (DPL 3).
-    mov ax, (4 * 8) | 3      ; User Data Selector (Index 4, RPL 3)
-    mov ds, ax
-    mov es, ax
-    mov fs, ax
-    mov gs, ax 
-
-    ; 2. Prepare the iretq stack frame
-    ; The stack MUST be 16-byte aligned before this if you plan 
-    ; on calling functions in Ring 3 that use SSE/AVX.
-    
-    mov rax, rsp             ; Save current RSP to pass it back as User RSP
-    
-    ; Push the 5-part frame (Order: SS, RSP, RFLAGS, CS, RIP)
-    push qword (4 * 8) | 3   ; SS (User Data Selector)
-    push rax                 ; RSP (User Stack Pointer)
-    
-    pushfq                   ; RFLAGS
-    ; Optional: If you want to force interrupts ON in user mode:
-    ; pop rax
-    ; or rax, 0x200          ; Set IF bit
-    ; push rax
-
-    push qword (3 * 8) | 3   ; CS (User Code Selector, Index 3, RPL 3)
-    push test_user_function  ; RIP (Target address)
-
-    ; 3. The Great Leap
-    ; If you use GS for kernel data, execute SWAPGS here.
-    ; swapgs 
-    
-    iretq
