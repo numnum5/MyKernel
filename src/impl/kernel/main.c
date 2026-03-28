@@ -8,6 +8,8 @@
 #include "x86_64/paging.h"
 #include "x86_64/tss.h"
 #include "x86_64/msr.h"
+#include "x86_64/idt.h"
+#include "x86_64/pmm.h"
 // #include "x86_64/multiboot.h"
 
 #define KEY_CODE_A 0x1E
@@ -95,30 +97,6 @@ void handle_input(struct KeyboardEvent event) {
 
 
 
-typedef struct {
-    uint32_t type;
-    uint32_t size;
-} multiboot_tag;
-
-typedef struct  {
-    uint64_t addr;
-    uint64_t len;
-#define MULTIBOOT_MEMORY_AVAILABLE              1
-#define MULTIBOOT_MEMORY_RESERVED               2
-#define MULTIBOOT_MEMORY_ACPI_RECLAIMABLE       3
-#define MULTIBOOT_MEMORY_NVS                    4
-#define MULTIBOOT_MEMORY_BADRAM                 5
-    uint32_t type;
-    uint32_t zero;
-} multiboot_mmap_entry;
-
-typedef struct {
-    uint32_t type;
-    uint32_t size;
-    uint32_t entry_size;
-    uint32_t entry_version;
-    multiboot_mmap_entry entries[];
-} multiboot_tag_mmap;
 
 
 uint64_t get_cr3() {
@@ -138,120 +116,9 @@ extern uint8_t stack_bottom[];
 uintptr_t kernel_start = (uintptr_t)&__kernel_heap_start;
 uintptr_t kernel_end   = (uintptr_t)&__kernel_heap_end;
 
-void parse_mmap(multiboot_tag_mmap *mmap_tag);
-
-MemoryRegion * memoryRegions = NULL;
-
-uint64_t get_l4_page_table(void)
-{
-    uint64_t cr3;
-    asm volatile ("mov %%cr3, %0" : "=r"(cr3));
-    return cr3 & 0x000FFFFFFFFFF000ULL;
-}
-
-#define PAGE_PRESENT  (1ULL << 0)
-#define PAGE_HUGE     (1ULL << 7)
-#define ADDRESS_MASK  0x000FFFFFFFFFF000ULL 
-
-typedef enum {
-    PAGE_SIZE_4KB,
-    PAGE_SIZE_2MB,
-    PAGE_SIZE_1GB,
-    PAGE_NOT_PRESENT
-} page_info_t;
-
-#define PTE_W  (1ULL << 1)  // 0x002
-#define PTE_U  (1ULL << 2)  // 0x004
-
-void map_page2(uint64_t virt_addr, uint64_t phys_addr, uint64_t flags) {
-    uint64_t pml4_idx = (virt_addr >> 39) & 0x1FF;
-    uint64_t pdpt_idx = (virt_addr >> 30) & 0x1FF;
-    uint64_t pd_idx   = (virt_addr >> 21) & 0x1FF;
-    uint64_t pt_idx   = (virt_addr >> 12) & 0x1FF;
-
-    uint64_t *pml4 = (uint64_t *)(get_l4_page_table() + VIRT_BASE);
-
-    // Step 1: PML4 -> PDPT
-    if (!(pml4[pml4_idx] & PAGE_PRESENT)) {
-        uint64_t frame = pmm_alloc_frame();
-        memset((void*)(frame + VIRT_BASE), 0, 4096);
-        pml4[pml4_idx] = frame | PAGE_PRESENT | PTE_W | PTE_U;
-    }
-    uint64_t *pdpt = (uint64_t *)((pml4[pml4_idx] & ADDRESS_MASK) + VIRT_BASE);
-
-    // Step 2: PDPT -> PD
-    if (!(pdpt[pdpt_idx] & PAGE_PRESENT)) {
-        uint64_t frame = pmm_alloc_frame();
-        memset((void*)(frame + VIRT_BASE), 0, 4096);
-        pdpt[pdpt_idx] = frame | PAGE_PRESENT | PTE_W | PTE_U;
-    }
-    uint64_t *pd = (uint64_t *)((pdpt[pdpt_idx] & ADDRESS_MASK) + VIRT_BASE);
-
-    // Step 3: PD -> PT
-    if (!(pd[pd_idx] & PAGE_PRESENT)) {
-        uint64_t frame = pmm_alloc_frame();
-        memset((void*)(frame + VIRT_BASE), 0, 4096);
-        // FIX: Assign to pd[pd_idx], NOT pdpt!
-        pd[pd_idx] = frame | PAGE_PRESENT | PTE_W | PTE_U;
-    }
-    uint64_t *pt = (uint64_t *)((pd[pd_idx] & ADDRESS_MASK) + VIRT_BASE);
-
-    // Step 4: Final PT Entry
-    // FIX: Set the flags passed into the function (or your hardcoded 0x7)
-    pt[pt_idx] = (phys_addr & ADDRESS_MASK) | PAGE_PRESENT | PTE_W | PTE_U;
-
-    asm volatile("invlpg (%0)" :: "r"(virt_addr) : "memory");
-}
-
-
-uint64_t * vmm_translate(uint64_t virt)
-{
-    uint64_t pml4_idx = (virt >> 39) & 0x1FF;
-    uint64_t pdpt_idx = (virt >> 30) & 0x1FF;
-    uint64_t pd_idx   = (virt >> 21) & 0x1FF;
-    uint64_t pt_idx   = (virt >> 12) & 0x1FF;
-    uint64_t offset = virt & 0x1FFFFF;
-
-
-    printf("pml4: %x, pdpt: %x, pd: %x, pt: %x\n", pml4_idx, pdpt_idx, pd_idx, pt_idx);
-
-
-    uint64_t * pml4 = (uint64_t *) (get_l4_page_table() + VIRT_BASE);
-    
-    if (!(pml4[pml4_idx] & PAGE_PRESENT)) 
-    {
-        return NULL;
-    }
-    uint64_t* pdpt = (uint64_t*)((pml4[pml4_idx] & ADDRESS_MASK) + VIRT_BASE);
-
-    if (!(pdpt[pdpt_idx] & PAGE_PRESENT)) 
-    {
-        return NULL;
-    }
-
-    uint64_t* pd = (uint64_t*)((pdpt[pdpt_idx] & ADDRESS_MASK) + VIRT_BASE);
-    if (!(pd[pd_idx] & PAGE_PRESENT)) {
-        return NULL;
-    }
-
-    uint64_t* pt = (uint64_t*)((pd[pd_idx] & ADDRESS_MASK) + VIRT_BASE);
-
-    if (!(pt[pt_idx] & PAGE_PRESENT)) 
-    {
-        return NULL;
-    }
-
-    uint64_t flags = pt[pt_idx] & 0xFFF;
-
-    printf("PD Flags: %x\n", flags);
-
-    return (uint64_t*)((pt[pt_idx] & ADDRESS_MASK) + offset);
-}
-
-
 void test_user_function(void)
 {
-    print_str("Hello from task2!\n");
+    // print_str("Hello from task2!\n");
     while (1){
         // for(volatile int i = 0; i < 100000000; i++);
     };
@@ -260,7 +127,7 @@ void test_user_function(void)
 
 void test2(void)
 {
-    print_str("Hello from task34!\n");
+    // print_str("Hello from task34!\n");
     while (1){
         // for(volatile int i = 0; i < 100000000; i++);
     };
@@ -269,118 +136,54 @@ void test2(void)
 extern uint8_t stack_top[];
 extern uint8_t stack_bottom[];
 extern uint8_t gdt64[];
-
-
-extern void jump_usermode();
-extern void enter_user_mode(uint64_t user_rip, uint64_t user_rsp);
-extern void start_first_thread(uint64_t * sp);
 extern uint8_t udata_selector[];
 extern uint8_t ucode_selector[];
+
 void kernel_main(uint32_t magic, void * multibootinfo) 
 {
     print_clear();
     print_set_color(PRINT_COLOR_YELLOW, PRINT_COLOR_BLACK);
     print_str("Welcome to our OS kernel!\n");
-    init_TSS();
-    idt_initv2();
+
+    tss_init();
+    idt_init();
+    pit_init();
+    pmm_init(multibootinfo);
+    scheduler_init();
     // init_syscall_interface();
-    // pit_init();
+    // ;
     // scheduler_init();
     // Thread * thread = create_userthread(test2,0x1000, 0xDEEDBEEF);
     // create_thread(test,0x1000, 0xABCDEFFF);
     // start_scheduler();
 
-    uint64_t multibootinfo_virt = (uint64_t)multibootinfo + VIRT_BASE;
 
-    multiboot_tag * tag;
-    for (tag = (multiboot_tag *) (multibootinfo_virt + 8); 
-    tag->type != 0; 
-    tag = (multiboot_tag *) ((uint8_t *) tag + ((tag->size + 7) & ~7))) 
+    // Initialise physical memory mananger
+   
+
+
+    uint64_t code_phys  = pmm_alloc_frame();
+    uint64_t stack_phys = pmm_alloc_frame();
+
+    // #define USER_CODE  0x400000
+    // #define USER_STACK 0x500000
+    // map_page2(USER_CODE,  code_phys,  PAGE_PRESENT | PTE_W | PTE_U);
+    // map_page2(USER_STACK, stack_phys, PAGE_PRESENT | PTE_W | PTE_U);
+    // vmm_translate(USER_CODE);
+    // vmm_translate(USER_STACK);
+
+    // uint8_t *code = (uint8_t*)USER_CODE;
+    // uint64_t *frame = (uint64_t *)(USER_STACK + 0x1000 - 5 * 8);
+    // code[0] = 0xEB; // JMP short
+    // code[1] = 0xFE; // jump back 2 bytes
+    // frame[0] = (uint64_t) code;    
+    // frame[1] = 0x1B;               
+    // frame[2] = 0x202;              
+    // frame[3] = USER_STACK + 0x1000;  
+    // frame[4] = 0x23;               
+
+    while (1)
     {
-        // Type 6 is the Memory Map tag
-        if (tag->type == 6) {
-            multiboot_tag_mmap * mmap = (multiboot_tag_mmap *) tag;
-            parse_mmap(mmap);
-
-
-            printf("\n tag size %x\n", tag->type);
-        }
-    }
-
-    pmm_init();
-
-
-    uint64_t phys_stack = pmm_alloc_frame(); // 2MB
-    uint64_t phys_stack1 = pmm_alloc_frame(); // 2MB
-    uint64_t phys_stack2 = pmm_alloc_frame(); // 2MB
-
-    uint64_t virt_stack = phys_stack + VIRT_BASE; // must be 2MB aligned
-
-    // // 1. Map first
-    map_page2(
-        virt_stack,
-        phys_stack,
-        PAGE_PRESENT | PTE_U | PTE_W
-    );
-
-    uint64_t user_stack_top = (virt_stack + 0x500);
-
-    vmm_translate(virt_stack);
-    vmm_translate(user_stack_top);
-
-
-    uint64_t *frame = (uint64_t *)(user_stack_top - 5 * 8);
-
-    frame[0] = (uint64_t)test2;    
-    frame[1] = 0x1B;               
-    frame[2] = 0x202;              
-    frame[3] = user_stack_top;  
-    frame[4] = 0x23;               
-
-
-    asm volatile (
-        "mov %0, %%rsp\n"
-        "ret\n"
-        :
-        : "r"(frame)
-        : "memory"
-    );
-
-    while (1);
-}
-
-void parse_mmap(multiboot_tag_mmap *mmap_tag) 
-{
-    uint32_t num_entries = (mmap_tag->size - sizeof(multiboot_tag_mmap)) 
-                           / mmap_tag->entry_size;
-
-    for (uint32_t i = 0; i < num_entries; i++)
-    {
-        multiboot_mmap_entry *entry = &mmap_tag->entries[i];
-
-        // Print or process the entry
-        if (entry->type == MULTIBOOT_MEMORY_AVAILABLE) 
-        {
-            MemoryRegion * region = pvPortMalloc(sizeof(MemoryRegion));
-            region->addr = entry->addr;
-            region->size = entry->len;
-            region->type = entry->type;
-
-
-            printf("addr: %x size: %x\n", region->addr, region->size);
-
-            push_back(&memoryRegions, region);
-
-        } 
-        else 
-        {
-            MemoryRegion * region = pvPortMalloc(sizeof(MemoryRegion));
-
-            region->addr = entry->addr;
-            region->size = entry->len;
-            region->type = entry->type;
-
-            push_back(&memoryRegions, region);
-        }
-    }
+        asm volatile("hlt");
+    };
 }

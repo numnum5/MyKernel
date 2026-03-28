@@ -180,11 +180,19 @@ gdt64:
 	dq (1 << 41) | (1 << 44) | (1 << 47) | (1 << 53)	; Kernel data segment entry
 	; writeable, code/data type, present, 64-bit
 .ucode: equ $ - gdt64
-	dq (1 << 43) | (1 << 41) | (1 << 44) | (3 << 45) | (1 << 47) | (1 << 53)	; User code segment entry
-	; executable, code/data type, user mode, present, 64-bit
+    dw 0xFFFF                    ; Limit (low)
+    dw 0                         ; Base (low)
+    db 0                         ; Base (middle)
+    db 11111010b                 ; Access: Present, DPL 3, S=1, Exec=1, Read=1 (0xFA)
+    db 10101111b                 ; Flags: G=1, L=1 (64-bit), limit19:16 (0xAF)
+    db 0    
 .udata: equ $ - gdt64
-	dq (1 << 41) | (1 << 44) | (3 << 45) | (1 << 47) | (1 << 53)	; User data segment entry
-	; writeable, code/data type, user mode, present, 64-bit
+    dw 0xFFFF                    ; Limit (low)
+    dw 0                         ; Base (low)
+    db 0                         ; Base (middle)
+    db 11110010b                 ; Access: Present, DPL 3, S=1, Exec=0, Write=1 (0xF2)
+    db 10001111b                 ; Flags: G=1, L=0, D=0 (REQUIRED for 64-bit data), limit (0x8F)
+    db 0
 .tss: equ $ - gdt64
 	resb 16	; Task state segment entry (filled programmatically later in boot process)
 .pointer:					; Value used by LGDT
@@ -232,17 +240,10 @@ high_mem_entry:
 	mov rsp, stack_top
 	xor rbp, rbp
 
-	; mov rax, rsp
-	; call print_hex64
-	; COULD you make a simple code to show page table l4 is acccessbile via virt address
-; [page_table_l4],
-
-	; ; Unmap lower-half identity mapping
 	mov rax, 0
 	mov [page_table_l4], rax
 	mov rax, cr3
 	mov cr3, rax
-
 
 	; Finally, go to main kernel function
 	call kernel_main

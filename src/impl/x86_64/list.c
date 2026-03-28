@@ -32,8 +32,6 @@ void insertAtFirst(struct MemoryRegion** head, uint64_t size, uint64_t addr, uin
     *head = newNode;
 }
 
-
-
 void push_back(MemoryRegion ** head, MemoryRegion * element) {
     if (*head == NULL) {
         *head = element;
@@ -137,9 +135,6 @@ void deleteAtPosition(MemoryRegion** head, int position) {
     vPortFree(temp->next);
     temp->next = next;
 }
-
-
-
 
 void printNodes(MemoryRegion * head)
 {
