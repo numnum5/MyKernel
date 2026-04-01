@@ -2,8 +2,8 @@ simple x86-64 kernel written in C
 
 Checklist:
 - [x] Higher Half Kernel (at 0xffffffff80000000)
-- [ ] GDT (kernel + user segments)
-- [ ] IDT (interrupt table)
+- [x] GDT (kernel + user segments)
+- [x] IDT (interrupt table)
 - [x] Physical Memory Manager (bitmap)
 - [x] Virtual memory (paging setup)
 - [ ] Syscall interface
