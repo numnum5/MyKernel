@@ -8,6 +8,8 @@ SECTIONS
 {
 	. = KERNEL_PHYS;
 	. += KERNEL_VIRT;
+	
+	__kernel_start = .;
 
 	.text ALIGN(4K) : AT(ADDR(.text) - KERNEL_VIRT) 
 	{
@@ -43,4 +45,6 @@ SECTIONS
 		*(.note*)
 		*(.comment*)
 	}
+
+	__kernel_end = .;
 }

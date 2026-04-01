@@ -55,29 +55,3 @@ idt_load:
 ; WRAPPED_HANDLER idt_handler_keyboard
 WRAPPED_HANDLER timer_interrupt_handler
 WRAPPED_HANDLER default_handler
-
-
-global enter_user_mode
-
-enter_user_mode:
-    ; rdi = user rip
-    ; rsi = user rsp
-
-    cli
-
-    mov ax, 0x23        ; user data selector
-    mov ds, ax
-    mov es, ax
-    mov fs, ax
-    mov gs, ax
-
-    push qword 0x23     ; SS
-    push rsi            ; RSP (user stack)
-    pushfq              ; RFLAGS
-    pop rax
-    or rax, 0x200       ; enable interrupts in user mode
-    push rax
-    push qword 0x2B     ; CS (user code)
-    push rdi            ; RIP (user entry point)
-
-    iretq

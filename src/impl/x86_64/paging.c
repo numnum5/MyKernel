@@ -1,6 +1,7 @@
 #include "x86_64/paging.h"
 #include "x86_64/list.h"
 #include "x86_64/memory.h"
+#include "x86_64/pmm.h"
 #include "print.h"
 
 static uint64_t get_l4_page_table(void)
@@ -8,6 +9,16 @@ static uint64_t get_l4_page_table(void)
     uint64_t cr3;
     asm volatile ("mov %%cr3, %0" : "=r"(cr3));
     return cr3 & 0x000FFFFFFFFFF000ULL;
+}
+
+void map_pages(uint64_t virt_addr, uint64_t * phys_addr, uint64_t count, uint64_t flags)
+{   
+    for (uint64_t  i = 0; i < count; i++)
+    {
+        uint64_t current_virt_addr = i * 0x1000 + virt_addr;
+        map_page(current_virt_addr, phys_addr[i], flags);
+        // printf("current: %x\n", current_virt_addr);
+    }
 }
 
 void map_page(uint64_t virt_addr, uint64_t phys_addr, uint64_t flags)

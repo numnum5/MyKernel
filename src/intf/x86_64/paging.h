@@ -33,3 +33,4 @@ typedef struct
 
 uint64_t * vmm_translate(uint64_t virt);
 void map_page(uint64_t virt_addr, uint64_t phys_addr, uint64_t flags);
+void map_pages(uint64_t virt_addr, uint64_t * phys_addr, uint64_t count, uint64_t flags);
