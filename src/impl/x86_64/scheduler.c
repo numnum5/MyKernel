@@ -1,7 +1,7 @@
 #include "x86_64/util.h"
 #include "x86_64/thread.h"
-#include "x86_64/queue.h"
 #include "x86_64/scheduler.h"
+#include "x86_64/stdlib.h"
 #include "print.h"
 
 queue * threads;
@@ -11,7 +11,7 @@ Thread * current_thread;
 static MLFQ mlfq;
 static volatile uint32_t pit_ticks = 0;
 static volatile uint64_t systick = 0;
-
+extern cpu_local_data single_cpu;
 extern void scheduler_yield(void);
 
 void print_thread(Thread * thread){
@@ -43,12 +43,14 @@ void switch_context(State_t * state)
     {
         pit_ticks = 0;
 
-        // print_thread(current_thread);
+        print_thread(current_thread);
         printf("Current thread rsp %x\n", state->frame.rsp);
         memcpy(&(current_thread->state), state, sizeof(State_t));
         
+        single_cpu.kernel_stack = state->frame.rsp;
+        printf("pit tick%d\n", pit_ticks);
 
-
+        printf("kernel stack: %x\n", single_cpu.kernel_stack);
         // mlfq_update_level(current_thread);
 
         // Thread * nextThread = NULL;
@@ -121,7 +123,13 @@ Thread * create_userthread(void (*entry)(void), uint64_t stack_size, uint64_t pi
     return thread;
 }
 
-Thread * create_thread(void (*entry)(void), uint64_t stack_size, uint64_t pid)
+void create_thread_ring(Thread * thread)
+{
+
+    enqueue(&mlfq.queues[0], thread);
+}
+
+void create_thread(void (*entry)(void), uint64_t stack_size, uint64_t pid)
 {
     static uint64_t pids = 5555;
     Thread * thread = pvPortMalloc(sizeof(Thread));
@@ -130,7 +138,7 @@ Thread * create_thread(void (*entry)(void), uint64_t stack_size, uint64_t pid)
     uint64_t *stack_top = (uint64_t *)(stack + stack_size);
     thread->state.frame.rip = (uint64_t) entry;
     thread->state.frame.rsp = (uint64_t) stack_top;
-    thread->state.frame.rflags = 0x002; 
+    thread->state.frame.rflags = 0x202; 
     thread->state.frame.cs = 0x08;
     thread->state.frame.ss = 0x10;
     thread->runtime_level = 0;
@@ -141,7 +149,7 @@ Thread * create_thread(void (*entry)(void), uint64_t stack_size, uint64_t pid)
     thread->runtime_duration = MLFQ_LEVEL_RUNTIME(thread->runtime_level);
 
     enqueue(&mlfq.queues[0], thread);
-    return thread;
+    
 
 //     Thread * thread = pvPortMalloc(sizeof(Thread));
 //     uint8_t * stack = pvPortMalloc(stack_size);
@@ -178,8 +186,8 @@ Thread * create_thread(void (*entry)(void), uint64_t stack_size, uint64_t pid)
 void process_create(void (*entry)(void), uint64_t stack_size, uint64_t pid)
 {
     // static uint64_t pids = 5555;
-    Thread * thread = pvPortMalloc(sizeof(Thread));
-    uint8_t * stack = pvPortMalloc(stack_size);
+    Thread * thread = malloc(sizeof(Thread));
+    uint8_t * stack = malloc(stack_size);
     
     thread->pid = pid;
     
@@ -233,6 +241,7 @@ void mlfq_update_level(Thread * thread)
 void scheduler_init(void)
 {
     threads = createQueue();
+
     for (uint8_t i = 0; i < MLFQ_NLEVELS; i++)
     {
         mlfq.queues[i].front = NULL;
@@ -253,6 +262,18 @@ void sleep(uint64_t ms)
     scheduler_yield();
 }
 
+
+void start_first_task(uint64_t *frame)
+{
+    asm volatile (
+        "mov %0, %%rsp;"   // load prepared stack
+        "iretq;"
+        :
+        : "r"(frame)
+        : "memory"
+    );
+}
+
 void start_scheduler(void)
 {
     Thread * thread = dequeue(&mlfq.queues[0]);
@@ -260,6 +281,11 @@ void start_scheduler(void)
     {
         current_thread = thread;
         current_thread->status = RUNNING;
-        // start_first_task(&(current_thread->state.frame));
+
+        printf("frame: %x\n", &(current_thread->state.frame));
+        printf("rsp: %x\n",current_thread->state.frame.rsp);
+
+
+        start_first_task(&(current_thread->state.frame));
     }
 }

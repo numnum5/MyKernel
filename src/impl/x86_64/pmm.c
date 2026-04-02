@@ -3,14 +3,14 @@
 #include "x86_64/stdlib.h"
 #include "x86_64/paging.h"
 #include "print.h"
-#define USER_STACK_START (0x7FFFFFFFFFF0 - 0x200000)
+
 static MemoryRegion * memoryRegions = NULL;
 static uint64_t * bitmap = NULL;
 static uint64_t total_memory_size = 0;
 static uint64_t total_pages = 0;
 static uint64_t total_frames;
 static uint64_t bitmap_size_bytes;
-static FileSystem fs;
+FileSystem fs;
 static uint64_t num_64_bits_needed;
 extern uint64_t heap_start;
 extern uint8_t __kernel_start[];
@@ -199,131 +199,7 @@ void fs_init(uint64_t multibootinfo)
             fs.disk                = (uint8_t*)disk;
             fs.fat_start = bs->reserved_sectors;
             fs.data_start = bs->reserved_sectors + (bs->num_fats * bs->fat_size_32);
-
-
-            File *f = fs_open(&fs, "USER    ELF");
-
-            // uint8_t size = 100;
-            char buffer[f->size + 1];
-
-            uint32_t bytes_read = fs_read(&fs, f, buffer, f->size + 1);
-
-
-            elf_ehdr_t *elf = (elf_ehdr_t*)buffer;
-
-            printf("\n");
-            print_char((char)elf->iden_bytes[0]);
-            print_char((char)elf->iden_bytes[1]);
-            print_char((char)elf->iden_bytes[2]);
-            print_char((char)elf->iden_bytes[3]);
-
-            printf("\n");
-
-
-            if (elf->iden_bytes[0] != 0x7F ||
-                elf->iden_bytes[1] != 'E' ||
-                elf->iden_bytes[2] != 'L' ||
-                elf->iden_bytes[3] != 'F')
-            {
-                printf("\n");
-            }
-
-            elf_phdr_t *ph = (elf_phdr_t*)(buffer + elf->e_phoff);
-
-            for (int i = 0; i < elf->e_phnum; i++)
-            {
-                if (ph[i].p_type != 1) // PT_LOAD 
-                    continue;
-                    
-
-
-
-                // for(uint8_t i = 0; i < pages; i++)
-                // {
-                //     uint8_t * addr = (uint8_t *)(virtual_address + (i * 0x1000));
-
-                //     printf("addr: %x\n", addr);
-
-                //     vmm_translate(addr);
-                //     // printf("d: %d\n", (*addr));
-                // }
-
-
-                // printf("filez: %d\n", ph[i].p_filesz);
-
-                // printf("offset: %d\n", ph[i].p_offset);
-
-                // memcpy(virtual_address, buffer + ph[i].p_offset, ph[i].p_filesz);
-
-                // for(uint8_t i = 0; i < 4; i++)
-                // {
-                //     printf("addr: %x\n", ((uint64_t*)virtual_address)[i]);
-                // }
-                // // free
-                // // uint64_t * frames = pmm_alloc(size, frame_nums);
-                // // print_clear();
-                // // if (frames != NULL)
-                // // {
-                // //     for(uint64_t i = 0; i < frame_nums; i++)
-                // //     {
-                // //         printf("frames[%d] %x\n", i, frames[i]);
-                // //     }
-                // // }
-                
-                // // // zero BSS
-                // // memset(dest + ph[i].filesz,
-                // //     0,
-                // //     ph[i].memsz - ph[i].filesz);
-
-                // uint64_t virt_stack = USER_STACK_START;
-                // uint64_t stack_pages = (0x200000 + 0x1000 - 1) / 0x1000;
-
-                // printf("%d\n", stack_pages);
-                // uint64_t * phys_start = malloc(sizeof(uint64_t) * stack_pages);
-                // pmm_alloc(stack_pages, phys_start);
-                // uint64_t virt_stack_region = phys_stack_region + VIRT_BASE;
-                // memset(virt_stack_region, 0, 0x200000);
-
-                // map_pages(virt_stack, phys_start, stack_pages , PAGE_PRESENT | PTE_W | PTE_U);
-
-                // vmm_translate(virt_stack + 0x1000 * 200);
-                // printf("addr: %x\n", ((uint64_t*)virt_stack)[200]);
-
-                // for(uint8_t i = 0; i < 4; i++)
-                // {
-                    
-                // }
-
-
-                                uint64_t pages = (0x200000 + PAGE_SIZE - 1) / 0x1000;
-                uint64_t virtual_address = ph[i].p_vaddr;
-                
-                uint64_t count =  count_frames();
-
-                 printf("before: %d\n", count);
-                uint64_t * frames = pmm_alloc(pages);
-
-                printf("FInished allocing\n");
-
-                count = count_frames();
-
-                printf("after: %d\n", count);
-
-                // printf("%d\n", pmm_set_bit(2093056));
-
-                map_pages(virtual_address, frames, pages, PAGE_PRESENT | PTE_W | PTE_U);
-
-                uint8_t * addr = (uint8_t *)(virtual_address + ((pages - 1) * PAGE_SIZE));
-                vmm_translate(addr);
-
-                // // set the first mem length of p_memsz to 0
-                memset(virtual_address, 0, ph[i].p_memsz);
-
-                free(frames);
-
-            }
-        }
-        
+        }   
     }
 }
 

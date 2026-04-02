@@ -172,7 +172,13 @@ global udata_selector       ; Make it visible to the linker
 ucode_selector: equ gdt64.ucode ; Create a C-friendly alias
 udata_selector: equ gdt64.udata ; Create a C-friendly alias
 gdt64:
-	dq 0												; Zero entry
+.Null: equ $ - gdt64   
+    dw 0xFFFF                    ; Limit (low).
+    dw 0                         ; Base (low).
+    db 0                         ; Base (middle)
+    db 0                         ; Access.
+    db 0                         ; Granularity.
+    db 0  												; Zero entry
 .kcode: equ $ - gdt64
 	dq (1 << 43) | (1 << 44) | (1 << 47) | (1 << 53)	; Kernel code segment entry
 	; executable, code/data type, present, 64-bit

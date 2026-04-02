@@ -14,6 +14,11 @@
 #define MULTIBOOT_MEMORY_ACPI_RECLAIMABLE       3
 #define MULTIBOOT_MEMORY_NVS                    4
 #define MULTIBOOT_MEMORY_BADRAM                 5
+#define USER_STACK 0x7FFFFFFFFFF0 // Alignment
+#define USER_STACK_START (USER_STACK - 0x200000 + 16)
+// #define USER_STACK_START (0x7FFFFFFFFFF0 - 0x200000)
+#define USER_STACK_TOP 0x7FFFFFFFFFF0
+
 
 typedef struct 
 {

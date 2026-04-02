@@ -2,7 +2,7 @@
 
 struct idt_entry idt_entries[256];
 struct idt_ptr idt_ptr;
-
+extern void scheduler_yield(void);
 
 void default_handler(uint64_t * sp)
 {
@@ -44,8 +44,10 @@ void idt_init(void)
     out_port_B(0x21, 0x01); // ICW4 master
     out_port_B(0xA1, 0x01); // ICW4 slave
 
-    out_port_B(0x21, 0xFF); // master PIC
-    out_port_B(0xA1, 0xFF); // slave PIC
+    
+    // out_port_B(0x21, 0xFF); // 11111110 → enable IRQ0 only
+    out_port_B(0x21, 0xFE); // 11111110 → enable IRQ0 only
+    out_port_B(0xA1, 0xFF); // keep slave masked for now
 
     idt_ptr.limit = (sizeof(struct idt_entry) * 256) - 1;
 	idt_ptr.base = (uint64_t) &idt_entries;
@@ -58,10 +60,14 @@ void idt_init(void)
         set_idt_gate(i, isr_table[i], 0x08, 0x8E);
     }
 
-    for (uint16_t i = 32; i < 256; i++) 
+    set_idt_gate(32, (uint64_t) scheduler_yield, 0x08, 0x8E);
+
+
+    for (uint16_t i = 33; i < 256; i++) 
     {
         set_idt_gate(i, (uint64_t) default_handler_wrapped, 0x08, 0x8E);
     }
+
 
     asm volatile("lidt %0"
                 :

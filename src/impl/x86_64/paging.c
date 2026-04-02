@@ -15,9 +15,9 @@ void map_pages(uint64_t virt_addr, uint64_t * phys_addr, uint64_t count, uint64_
 {   
     for (uint64_t  i = 0; i < count; i++)
     {
-        uint64_t current_virt_addr = i * 0x1000 + virt_addr;
+        uint64_t current_virt_addr = i * PAGE_SIZE + virt_addr;
         map_page(current_virt_addr, phys_addr[i], flags);
-        // printf("current: %x\n", current_virt_addr);
+        // printf("current: %x, physical: %x\n", current_virt_addr, phys_addr[i]);
     }
 }
 
