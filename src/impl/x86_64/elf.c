@@ -1,6 +1,7 @@
 #include "x86_64/pmm.h"
 #include "x86_64/paging.h"
 #include "x86_64/scheduler.h"
+#include "x86_64/thread.h"
 
 extern FileSystem fs;
 
@@ -81,11 +82,10 @@ void start_user_process(const char * filename)
     user_thread->state.frame.rflags = 0x202;
     user_thread->state.frame.rsp = USER_STACK_TOP;
     user_thread->state.frame.ss = 0x23;
-
     user_thread->pid = 0xDEADBEEF;
     user_thread->priority = 1;
-
-
+    user_thread->thread_type = USER;
+    
     create_thread_ring(user_thread);
 
     // uint64_t *frame = (uint64_t *)(USER_STACK_TOP - 5 * 8);

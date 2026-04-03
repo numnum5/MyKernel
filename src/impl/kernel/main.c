@@ -13,6 +13,7 @@
 #include "x86_64/util.h"
 #include "x86_64/scheduler.h"
 #include "x86_64/elf.h"
+#include "x86_64/mrs.h"
 
 extern char __kernel_heap_start;
 extern char __kernel_heap_end;
@@ -24,55 +25,8 @@ extern uint8_t gdt64[];
 extern uint8_t udata_selector[];
 extern uint8_t ucode_selector[];
 
-// Create an actual instance of this struct in RAM
-cpu_local_data single_cpu;
 
 
-void write_gs_base(uint64_t address) {
-
-    // Split 64-bit address into two 32-bit halves
-
-    uint32_t low = (uint32_t)(address & 0xFFFFFFFF);
-
-    uint32_t high = (uint32_t)(address >> 32);
-
-
-
-    asm volatile (
-
-        "wrmsr"
-
-        : 
-
-        : "c" (0xC0000101), // ECX: The MSR address for GS_BASE
-
-          "a" (low),        // EAX: Lower 32 bits
-
-          "d" (high)        // EDX: Higher 32 bits
-
-    );
-
-}
-
-
-
-void init_system() {
-    // Fill the struct with some test values
-    single_cpu.kernel_stack = 0xAAAA5555; 
-    single_cpu.user_stack   = USER_STACK_TOP;
-
-    // Tell the CPU: GS Base = the memory address of my_cpu_data
-    write_gs_base((uint64_t)&single_cpu);
-}
-
-uint64_t read_kernel_stack() {
-    uint64_t result;
-    asm volatile (
-        "movq %%gs:16, %0"  // Read 8 bytes starting at GS_BASE + 8
-        : "=r" (result)    // Output to the 'result' variable
-    );
-    return result;
-}
 
 
 
@@ -89,7 +43,40 @@ void kernel_process(void)
     };
 }
 
-extern void syscall_stub(void);
+
+static inline uint64_t read_gs_16(void)
+{
+    uint64_t value;
+    asm volatile (
+        "mov %%gs:8, %0"
+        : "=r"(value)
+        :
+        : "memory"
+    );
+    return value;
+}
+
+#define MSR_GS_BASE        0xC0000101
+#define MSR_KERNEL_GS_BASE 0xC0000101
+
+
+
+static uint8_t kernel_stack[4096];
+cpu_local cpu;
+void init_cpu()
+{
+    cpu.self = (uint64_t)&cpu;
+    cpu.kernel_stack = (uint64_t) kernel_stack;   // replace with real stack later
+    cpu.user_stack   = USER_STACK_TOP;
+
+    // Set GS bases
+    write_msr(0xC0000101, (uint64_t)&cpu);                       // user GS
+    // write_msr(0xC0000102, (uint64_t)&cpu);   // kernel GS
+}
+
+// Create an actual instance of this struct in RAM
+cpu_local_data single_cpu;
+
 
 void kernel_main(uint32_t magic, void * multibootinfo) 
 {
@@ -102,11 +89,16 @@ void kernel_main(uint32_t magic, void * multibootinfo)
     pmm_init(multibootinfo);
     fs_init(multibootinfo);
     scheduler_init();
+    init_scheduler_msr();
     // parse_elf("ELF");
     // init_system();
 
+    init_cpu();
+    // write_msr(0xC0000101, (uint64_t)&single_cpu);
+    // init_cpu_gs((uint64_t) &single_cpu);
 
-    
+    uint64_t data = read_gs_16();
+    printf("local cpu data addr: %x\n", data);
     
 
      
@@ -126,10 +118,14 @@ void kernel_main(uint32_t magic, void * multibootinfo)
 
     // init_syscall_interface();
     // ;
-    start_user_process("USER    ELF");
-    // Thread * thread = create_userthread(test2,0x1000, 0xDEEDBEEF);
-    create_thread(kernel_process, 0x1000, 0xABCDEFFF);
-    start_scheduler();
+    //
+
+    {
+        create_thread(kernel_process, 0x1000, 0xABCDEFFF);
+        start_user_process("USER    ELF");
+        start_scheduler();
+    }
+
 
     while (1)
     {

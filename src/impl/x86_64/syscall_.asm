@@ -1,5 +1,5 @@
 extern syscall_handler
-global syscall_stub
+global syscall_entry
 %macro pushaq 0
 push rax
 push rbx
@@ -38,15 +38,16 @@ pop rax
 
 
 ; This is called form user space, meaning you cannot call it in kernel code (there's no need to anyway)
-syscall_stub:
+syscall_entry:
+    cli
+    ; swapgs
     ; Store the user stack and restore the kernel stack
-    mov qword [gs:16], rsp
-    ret
-    ; mov rsp, qword [gs:8]
-    ; pushaq
+    mov [gs:16], rsp
+    mov rsp, [gs:8]
+    pushaq
     ; cld
-    ; mov rdi, rsp
-    ; call syscall_handler
+    mov rdi, rsp
+    call syscall_handler
     ; popaq
 
     ; ; Return from the syscall

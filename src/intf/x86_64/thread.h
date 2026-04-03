@@ -58,6 +58,12 @@ typedef enum
     STOPPED
 } Status;
 
+typedef enum 
+{
+    USER,
+    KERNEL
+} Thread_Type;
+
 typedef struct 
 {
     uint8_t runtime_level;
@@ -71,5 +77,6 @@ typedef struct
     Status status;
     uint8_t priority;
     State_t state;
+    Thread_Type thread_type;
     uint64_t * stack_pointer;
 } Thread;

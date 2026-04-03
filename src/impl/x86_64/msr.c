@@ -7,45 +7,26 @@
 
 extern void syscall_entry();
 
-
-static inline void wrmsr(uint32_t msr, uint64_t value) {
-    uint32_t low = value & 0xFFFFFFFF;
-    uint32_t high = value >> 32;
-    asm volatile (
-        "wrmsr"
-        :
-        : "c"(msr), "a"(low), "d"(high)
-        : "memory"
-    );
-}
-
-void init_syscall_interface() {
-    // 1. Enable SCE in EFER
-    uint32_t low, high;
-    asm volatile("rdmsr" : "=a"(low), "=d"(high) : "c"(IA32_EFER));
-    wrmsr(IA32_EFER, ((uint64_t)high << 32) | (low | 1));
-
-    // 2. Set syscall entry point
-    // wrmsr(IA32_LSTAR, (uint64_t)syscall_entry);
-
-    // 3. Set STAR (CS selectors)
-    uint64_t star = ((uint64_t)0x1B << 48) | ((uint64_t)0x08 << 32);
-    wrmsr(IA32_STAR, star);
-
-    // 4. Set flags to clear on entry
-    wrmsr(IA32_FMASK, 0x202);
-}
-
-
-uint64_t syscall1(uint64_t number, uint64_t arg1) 
+uint64_t read_msr(uint64_t msr) 
 {
-    uint64_t ret;
-    asm volatile(
-        "syscall"
-        : "=a"(ret)             // output: return value in RAX
-        : "a"(number),           // input: syscall number in RAX
-          "D"(arg1)              // input: 1st argument in RDI
-        : "rcx", "r11", "memory" // clobbered registers
-    );
-    return ret;
+    uint64_t rax, rdx;
+    asm("rdmsr" : "=a" (rax), "=d" (rdx) : "c"(msr));
+
+    return (rdx << 32) | rax;
+}
+
+void write_msr(uint64_t msr, uint64_t data) 
+{
+    uint64_t rax = data & 0xFFFFFFFF;
+    uint64_t rdx = data >> 32;
+    asm("wrmsr" :: "a" (rax), "d" (rdx), "c"(msr));
+}
+
+void init_scheduler_msr() 
+{
+    write_msr(0xC0000081, read_msr(0xC0000081) | ((uint64_t) 0x8 << 32));
+    write_msr(0xC0000081, read_msr(0xC0000081) | ((uint64_t) 0x18 << 48));
+    write_msr(0xC0000082, (uint64_t) syscall_entry); // Start execution at the syscall stub when a syscall occurs
+    write_msr(0xC0000084, 0); // Mask nothing
+    write_msr(0xC0000080, read_msr(0xC0000080) | 1); // Set the syscall enable bit
 }

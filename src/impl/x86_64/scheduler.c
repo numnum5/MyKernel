@@ -47,10 +47,22 @@ void switch_context(State_t * state)
         printf("Current thread rsp %x\n", state->frame.rsp);
         memcpy(&(current_thread->state), state, sizeof(State_t));
         
-        single_cpu.kernel_stack = state->frame.rsp;
+    
+        if (current_thread->thread_type == KERNEL)
+        {
+            single_cpu.kernel_stack = state->frame.rsp;
+            printf("kernel stack: %x\n", single_cpu.kernel_stack);
+        }
+        else if (current_thread->thread_type == USER)
+        {
+            single_cpu.user_stack = state->frame.rsp;
+            printf("user stack: %x\n", single_cpu.user_stack);
+        }
+
+        
         printf("pit tick%d\n", pit_ticks);
 
-        printf("kernel stack: %x\n", single_cpu.kernel_stack);
+        
         // mlfq_update_level(current_thread);
 
         // Thread * nextThread = NULL;
@@ -67,13 +79,16 @@ void switch_context(State_t * state)
         //     }
         // }
 
-        enqueue(&mlfq.queues[current_thread->runtime_level], current_thread);
+        enqueue(&mlfq.queues[0], current_thread);
 
         Thread * next_thread  = dequeue(&mlfq.queues[0]);
+
+        printf("info abotu next thread:\n");
+        print_thread(next_thread);
         
         memcpy(state, &(next_thread->state), sizeof(State_t));
 
-
+        printf("state rip: %x\n", state->frame.rip);
         // printf("state: %x\n", );
         // state = &(next_thread->state);
         
@@ -103,38 +118,19 @@ void thread_wrapper(void (*entry)(void))
 }
 
 
-Thread * create_userthread(void (*entry)(void), uint64_t stack_size, uint64_t pid)
-{
-    uint8_t * stack = pvPortMalloc(stack_size);
-    uint64_t rsp = (uint64_t)((uint64_t) stack + stack_size);
-
-    State_reversed * state = (State_reversed *)(rsp - sizeof(State_reversed));
-
-    state->rip = (uint64_t) entry;
-    state->rsp = (uint64_t) rsp;
-    state->rflags = 0x002; 
-    state->cs = 0x23;
-    state->ss = 0x1B;
-    
-    Thread * thread = pvPortMalloc(sizeof(Thread));
-    thread->stack_pointer = (uint64_t *) rsp;
-    //enqueue(&mlfq.queues[0], thread);
-
-    return thread;
-}
-
 void create_thread_ring(Thread * thread)
 {
 
+    printf("thread pid: %x\n", thread->pid);
     enqueue(&mlfq.queues[0], thread);
 }
 
 void create_thread(void (*entry)(void), uint64_t stack_size, uint64_t pid)
 {
-    static uint64_t pids = 5555;
-    Thread * thread = pvPortMalloc(sizeof(Thread));
-    uint8_t * stack = pvPortMalloc(stack_size);
+    Thread * thread = malloc(sizeof(Thread));
+    uint8_t * stack = malloc(stack_size);
     thread->pid = pid;
+    thread->thread_type = KERNEL;
     uint64_t *stack_top = (uint64_t *)(stack + stack_size);
     thread->state.frame.rip = (uint64_t) entry;
     thread->state.frame.rsp = (uint64_t) stack_top;
@@ -147,38 +143,7 @@ void create_thread(void (*entry)(void), uint64_t stack_size, uint64_t pid)
     // 1 --> 200ms
     // 2 --> 300ms ...
     thread->runtime_duration = MLFQ_LEVEL_RUNTIME(thread->runtime_level);
-
     enqueue(&mlfq.queues[0], thread);
-    
-
-//     Thread * thread = pvPortMalloc(sizeof(Thread));
-//     uint8_t * stack = pvPortMalloc(stack_size);
-    
-//     uint64_t stack_top = (uint64_t)((uint64_t) stack + stack_size);
-
-//     CPU_Frame * CPU_Frame = stack_top - sizeof(CPU_Frame);
-
-// // rbp ... r16 rip, 
-
-//     CPU_Frame->rip = (uint64_t) entry;
-//     CPU_Frame->rsp = (uint64_t) stack_top;
-//     CPU_Frame->rflags = 0x202; 
-//     CPU_Frame->cs = 0x18 | 3;
-//     CPU_Frame->ss = 0x20 | 3;
-
-
-//     thread->state.frame = (*CPU_Frame);
-//     thread->pid = pid;
-//     thread->runtime_level = 0;
-//     thread->runtime = 0;
-//     // If it's level 0 then run time duration is only 100ms
-//     // 1 --> 200ms
-//     // 2 --> 300ms ...
-//     thread->runtime_duration = MLFQ_LEVEL_RUNTIME(thread->runtime_level);
-
-//     enqueue(&mlfq.queues[0], thread);
-//     return thread;
-    // enqueue(threads, thread);
 }
 
 
