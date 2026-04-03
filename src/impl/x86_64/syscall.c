@@ -1,56 +1,42 @@
 
-#include <stdint.h>
-#include "x86_64/thread.h"
-#include "print.h"
+#include "x86_64/syscall.h"
 
-typedef enum {
-    SYS_WRITE,
-    SYS_YIELD,
-    SYS_EXIT
+static syscall_handler_t syscall_handlers[SYSCALL_NUM];
 
-} Syscall;
+void init_syscalls(void)
+{   
+    for (uint8_t i = 0; i < SYSCALL_NUM; i++)
+    {
+        syscall_handlers[i] = syscall_default;
+    }
 
-typedef struct {
-    uint64_t r15, r14, r13, r12, r11, r10, r9, r8, rsi, rdi, rbp, rdx, rcx, rbx, rax;
-} __attribute__((packed)) syscall_reg_t;
+    syscall_handlers[1] = syscall_write;
+}
 
-
-void syscall_handler(syscall_reg_t* state)
+void syscall_default(syscall_reg_t * r)
 {
+    while(1)
+    {
+        asm volatile("hlt");
+    }
+}
 
-
-
-    printf("SYSCALLED\n");
-
-
-    printf("rax: %x\n", state->rax);
-    printf("rdi: %x\n", state->rdi);
-    printf("rbx: %x\n", state->rbx);
-    printf("rsi: %x\n", state->rsi);
-
-    char * string = (char*) state->rdi;
-
-    printf(string);
-   
-
-
-    // printf("%x\n", state->rax);
+void syscall_write(syscall_reg_t *r) 
+{
+    printf((char *)r->rdi);
     while(1);
-    // return 0;
-    // switch (state->rax) {
-    //     case SYS_WRITE:
-    //         return 0;
+}
 
-    //     case SYS_YIELD:
-    //         // schedule_yield(state);   // voluntary switch
-    //         return 0;
+void syscall_printf(syscall_reg_t *r) 
+{
+    printf((char *)r->rdi);
+    while(1);
+}
 
-    //     case SYS_EXIT:
-    //         // thread_exit();
-    //         // schedule_yield(state);   // switch away permanently
-    //         return 0;
-
-    //     default:
-    //         return -1;
-    // }
+void syscall_handler(syscall_reg_t* r)
+{
+    if (r->rax < (uint64_t) SYSCALL_NUM) 
+    {
+        syscall_handlers[r->rax](r);
+    }
 }

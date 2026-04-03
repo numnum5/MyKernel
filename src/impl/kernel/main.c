@@ -14,6 +14,7 @@
 #include "x86_64/scheduler.h"
 #include "x86_64/elf.h"
 #include "x86_64/mrs.h"
+#include "x86_64/syscall.h"
 
 extern char __kernel_heap_start;
 extern char __kernel_heap_end;
@@ -92,7 +93,7 @@ void kernel_main(uint32_t magic, void * multibootinfo)
     init_scheduler_msr();
     // parse_elf("ELF");
     // init_system();
-
+    init_syscalls();
     init_cpu();
     // write_msr(0xC0000101, (uint64_t)&single_cpu);
     // init_cpu_gs((uint64_t) &single_cpu);
