@@ -101,7 +101,7 @@ void kernel_main(uint32_t magic, void * multibootinfo)
     uint64_t data = read_gs_16();
     printf("local cpu data addr: %x\n", data);
     
-
+    print_clear();
      
     // uint64_t val = read_kernel_stack();
     
@@ -121,11 +121,11 @@ void kernel_main(uint32_t magic, void * multibootinfo)
     // ;
     //
 
-    {
-        create_thread(kernel_process, 0x1000, 0xABCDEFFF);
-        start_user_process("USER    ELF");
-        start_scheduler();
-    }
+    // {
+    //     create_thread(kernel_process, 0x1000, 0xABCDEFFF);
+    //     start_user_process("USER    ELF");
+    //     start_scheduler();
+    // }
 
 
     while (1)

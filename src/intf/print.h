@@ -22,6 +22,8 @@ enum {
 	PRINT_COLOR_WHITE = 15,
 };
 
+void vga_clear();
+void vga_print(const char* str);
 void print_clear();
 void print_char(char character);
 void print_str(char* string);
@@ -31,3 +33,4 @@ void print_uint64_hex(uint64_t value);
 void print_uint64_bin(uint64_t value);
 void print_int(int64_t n);
 void printf(const char* format, ...);
+void vga_putc(char c);

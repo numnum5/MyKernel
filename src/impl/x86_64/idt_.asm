@@ -1,4 +1,4 @@
-; extern idt_handler_keyboard
+extern keyboard_handler
 extern timer_interrupt_handler
 extern switch_context
 extern default_handler
@@ -55,3 +55,4 @@ idt_load:
 ; WRAPPED_HANDLER idt_handler_keyboard
 WRAPPED_HANDLER timer_interrupt_handler
 WRAPPED_HANDLER default_handler
+WRAPPED_HANDLER keyboard_handler

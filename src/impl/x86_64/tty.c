@@ -96,3 +96,19 @@
 
 // void keyboard_init();
 // void keyboard_set_handler(void (*handler)(struct KeyboardEvent event));
+
+
+
+// typedef struct {
+//     uint64_t c_pos_x;
+//     uint64_t c_pos_y;
+//     uint64_t cols;
+//     uint64_t rows;
+//     uint8_t *font;
+//     color_t fg;
+//     color_t bg;
+//     // lock_t tty_lock;
+
+//     char *kb_in_buffer;
+//     uint64_t kb_in_buffer_index;
+// } tty_t;

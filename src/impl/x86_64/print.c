@@ -25,6 +25,10 @@ void clear_row(size_t row) {
     }
 }
 
+
+
+
+
 void print_clear() {
     for (size_t i = 0; i < NUM_ROWS; i++) {
         clear_row(i);
@@ -103,6 +107,14 @@ void print_uint64_dec(uint64_t value) {
 }
 
 
+
+void vga_print(const char* str)
+{
+    while (*str)
+    {
+        vga_putc(*str++);
+    }
+}
 
 
 void printf(const char* format, ...) {
@@ -195,6 +207,75 @@ void print_uint64_hex(uint64_t value) {
     
     while (i-- > 0) {
         print_char(buffer[i]);
+    }
+}
+
+volatile uint16_t *vga = (uint16_t*)(0xB8000 + VIRT_BASE);
+#define VGA_WIDTH  80
+#define VGA_HEIGHT 25
+int cursor_x = 0;
+int cursor_y = 0;
+
+uint8_t color2 = 0x07;
+
+void vga_clear()
+{
+    for (int i = 0; i < 80 * 25; i++)
+        vga[i] = (color << 8) | ' ';
+
+    cursor_x = 0;
+    cursor_y = 0;
+}
+
+void vga_putc(char c)
+{
+    // Newline
+    if (c == '\n') {
+        cursor_x = 0;
+        cursor_y++;
+        return;
+    }
+
+    // Backspace
+    if (c == '\b') {
+        if (cursor_x > 0) {
+            cursor_x--;
+        } else if (cursor_y > 0) {
+            cursor_y--;
+            cursor_x = VGA_WIDTH - 1;
+        }
+
+        vga[cursor_y * VGA_WIDTH + cursor_x] = ' ' | (color << 8);
+        return;
+    }
+
+    // Normal character
+    vga[cursor_y * VGA_WIDTH + cursor_x] = c | (color << 8);
+    cursor_x++;
+
+    // Wrap line
+    if (cursor_x >= VGA_WIDTH) {
+        cursor_x = 0;
+        cursor_y++;
+    }
+
+    // Scroll if needed
+    if (cursor_y >= VGA_HEIGHT) {
+        // move all lines up
+        for (int y = 1; y < VGA_HEIGHT; y++) {
+            for (int x = 0; x < VGA_WIDTH; x++) {
+                vga[(y - 1) * VGA_WIDTH + x] =
+                    vga[y * VGA_WIDTH + x];
+            }
+        }
+
+        // clear last line
+        for (int x = 0; x < VGA_WIDTH; x++) {
+            vga[(VGA_HEIGHT - 1) * VGA_WIDTH + x] =
+                ' ' | (color << 8);
+        }
+
+        cursor_y = VGA_HEIGHT - 1;
     }
 }
 

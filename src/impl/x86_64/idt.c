@@ -1,5 +1,9 @@
 #include "x86_64/idt.h"
+#include <stddef.h>
 
+#include "print.h"
+#include "bool.h"
+#include "x86_64/ps2.h"
 struct idt_entry idt_entries[256];
 struct idt_ptr idt_ptr;
 extern void scheduler_yield(void);
@@ -29,6 +33,135 @@ void gpf_handler_c(interrupt_frame_t *f )
     }
 }
 
+extern void keyboard_handler_wrapped();
+
+
+#define TTY_SIZE 256
+
+static const char keymap[128] = {
+    0,27,'1','2','3','4','5','6','7','8','9','0','-','=', '\b',
+    '\t','q','w','e','r','t','y','u','i','o','p','[',']','\n',
+    0,'a','s','d','f','g','h','j','k','l',';','\'','`',
+    0,'\\','z','x','c','v','b','n','m',',','.','/',0,
+    '*',0,' '   // <-- added entries up to 0x39
+};
+
+static const char keymap_shift[128] = {
+    0,27,'!','@','#','$','%','^','&','*','(',')','_','+', '\b',
+    '\t','Q','W','E','R','T','Y','U','I','O','P','{','}','\n',
+    0,'A','S','D','F','G','H','J','K','L',':','"','~',
+    0,'|','Z','X','C','V','B','N','M','<','>','?',0,
+    '*',0,' '   // <-- added entries up to 0x39
+};
+char tty_buf[TTY_SIZE];
+int tty_head = 0;
+int tty_tail = 0;
+static int shift = 0;
+
+int strcmp(const char* a, const char* b)
+{
+    while (*a && (*a == *b)) {
+        a++;
+        b++;
+    }
+    return *(unsigned char*)a - *(unsigned char*)b;
+}
+
+int startswith(const char* str, const char* prefix)
+{
+    while (*prefix) {
+        if (*str++ != *prefix++)
+            return 0;
+    }
+    return 1;
+}
+
+void shell_execute(char* cmd)
+{
+    if (strcmp(cmd, "help") == 0)
+    {
+        vga_print("Commands:\n");
+        vga_print(" help  - show commands\n");
+        vga_print(" clear - clear screen\n");
+        vga_print(" echo  - print text\n");
+    }
+    else if (strcmp(cmd, "clear") == 0)
+    {
+        vga_clear();
+    }
+    else if (startswith(cmd, "echo "))
+    {
+        vga_print(cmd + 5);
+        vga_putc('\n');
+    }
+    else if (cmd[0] == 0)
+    {
+        // empty line
+    }
+    else
+    {
+        vga_print("Unknown command: ");
+        vga_print(cmd);
+        vga_putc('\n');
+    }
+}
+
+void keyboard_handler()
+{
+    out_port_B(0x20, 0x20); 
+    static bool is_extended = 0;
+    uint8_t sc = ps2_read_scan_code();
+
+    if (sc & 0x80)
+        return;
+
+    if (sc == 42 || sc == 54) 
+    {
+        shift = 1;
+        return;
+    }
+
+    char c = shift ? keymap_shift[sc] : keymap[sc];
+    if (!c) return;
+
+    // BACKSPACE
+    if (c == '\b')
+    {
+        if (tty_head != tty_tail)
+        {
+            tty_head = (tty_head - 1 + TTY_SIZE) % TTY_SIZE;
+            // remove visually
+            vga_putc('\b');
+            vga_putc(' ');
+            vga_putc('\b');
+        }
+        // out_port_B(0x20, 0x20);
+        return;
+    }
+
+    if (c == '\n')
+    {
+        tty_buf[tty_head] = 0;
+        shell_execute(tty_buf);
+
+        tty_head = 0;
+        tty_tail = 0;
+
+        vga_print("\n> ");
+        return;
+    }
+
+    int next = (tty_head + 1) % TTY_SIZE;
+   
+    if (next != tty_tail)
+    {
+        tty_buf[tty_head] = c;
+        tty_head = next;
+        
+    }
+
+    vga_putc(c);
+}
 
 void idt_init(void)
 {
@@ -46,7 +179,8 @@ void idt_init(void)
 
     
     // out_port_B(0x21, 0xFF); // 11111110 → enable IRQ0 only
-    out_port_B(0x21, 0xFE); // 11111110 → enable IRQ0 only
+    // out_port_B(0x21, 0xFE); // 11111110 → enable IRQ0 only
+    out_port_B(0x21, 0xFD);
     out_port_B(0xA1, 0xFF); // keep slave masked for now
 
     idt_ptr.limit = (sizeof(struct idt_entry) * 256) - 1;
@@ -60,10 +194,10 @@ void idt_init(void)
         set_idt_gate(i, isr_table[i], 0x08, 0x8E);
     }
 
-    set_idt_gate(32, (uint64_t) scheduler_yield, 0x08, 0x8E);
+    // set_idt_gate(32, (uint64_t) scheduler_yield, 0x08, 0x8E);
+    set_idt_gate(0x21, (uint64_t) keyboard_handler_wrapped, 0x08, 0x8E);
 
-
-    for (uint16_t i = 33; i < 256; i++) 
+    for (uint16_t i = 34; i < 256; i++) 
     {
         set_idt_gate(i, (uint64_t) default_handler_wrapped, 0x08, 0x8E);
     }
