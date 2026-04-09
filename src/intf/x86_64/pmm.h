@@ -19,7 +19,6 @@
 // #define USER_STACK_START (0x7FFFFFFFFFF0 - 0x200000)
 #define USER_STACK_TOP 0x7FFFFFFFFFF0
 
-
 typedef struct 
 {
     uint32_t type;
@@ -29,43 +28,33 @@ typedef struct
 typedef struct {
     uint32_t type;   // = 3 (MULTIBOOT_TAG_TYPE_MODULE)
     uint32_t size;   // total size of this tag (including header)
-
     uint32_t mod_start;  // physical start address of module (disk.img in RAM)
     uint32_t mod_end;    // physical end address
-
     char cmdline[];     // optional null-terminated string (e.g. "disk")
 } __attribute__((packed)) multiboot_tag_module;
 
 typedef struct {
     uint8_t  jmp[3];
     char     oem[8];
-
     uint16_t bytes_per_sector;
     uint8_t  sectors_per_cluster;
     uint16_t reserved_sectors;
     uint8_t  num_fats;
-
     uint16_t root_entries;        // FAT12/16 only (should be 0 for FAT32)
     uint16_t total_sectors_16;
-
     uint8_t  media;
     uint16_t fat_size_16;         
-
     uint16_t sectors_per_track;
     uint16_t num_heads;
     uint32_t hidden_sectors;
     uint32_t total_sectors_32;
-
     uint32_t fat_size_32;         // THIS is key for FAT32
     uint16_t ext_flags;
     uint16_t fs_version;
     uint32_t root_cluster;        // FAT32 root starts here
-
     uint16_t fs_info;
     uint16_t backup_boot_sector;
-
     uint8_t  reserved[12];
-
     uint8_t  drive_number;
     uint8_t  reserved1;
     uint8_t  boot_signature;
@@ -173,6 +162,19 @@ void fs_init(uint64_t multibootinfo);
 uint64_t * pmm_alloc_frame(void);
 uint64_t * pmm_alloc(uint64_t size);
 uint64_t count_frames(void);
+void fat32_list(FileSystem *fs);
+uint32_t fat32_find_free_cluster(void);
+void fat32_list_wrapper(void);
+void wrapper(void);
+void list_dir(uint32_t cluster_dir);
+void fat32_init_directory(FileSystem *fs,
+                          uint32_t cluster,
+                          uint32_t parent);
+void fat32_add_entry(FileSystem *fs,
+                     uint32_t parent_cluster,
+                     const char *name,
+                     uint32_t new_cluster);
+void fat32_mkdir(uint32_t parent_cluster, const char *name);
 uint32_t cluster_to_sector(FileSystem *fs, uint32_t cluster);
 uint32_t fat_next_cluster(FileSystem *fs, uint32_t cluster);
 uint32_t fs_read(FileSystem *fs, File *f, void *buffer, uint32_t size);

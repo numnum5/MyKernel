@@ -11,6 +11,9 @@ static uint64_t total_pages = 0;
 static uint64_t total_frames;
 static uint64_t bitmap_size_bytes;
 FileSystem fs;
+
+
+uint32_t current_cluster;
 static uint64_t num_64_bits_needed;
 extern uint64_t heap_start;
 extern uint8_t __kernel_start[];
@@ -54,7 +57,6 @@ void parse_mmap(multiboot_tag_mmap * mmap_tag)
     {
         multiboot_mmap_entry * entry = &mmap_tag->entries[i];
 
-
         MemoryRegion * region = (MemoryRegion *)malloc(sizeof(MemoryRegion));
         region->addr = entry->addr;
         region->size = entry->len;
@@ -64,6 +66,244 @@ void parse_mmap(multiboot_tag_mmap * mmap_tag)
         push_back(&memoryRegions, region);
         
     }
+}
+
+void wrapper(void)
+{
+    fat32_mkdir(fs.root_cluster, "test");
+    fat32_mkdir(fs.root_cluster, "sys");
+}
+
+void fat32_mkdir(uint32_t parent_cluster, const char *name)
+{
+    uint32_t new_cluster = fat32_find_free_cluster();
+
+    fat32_init_directory(&fs, new_cluster, parent_cluster);
+
+    fat32_add_entry(&fs, parent_cluster, name, new_cluster);
+}
+
+void fat32_add_entry(FileSystem *fs,
+                     uint32_t parent_cluster,
+                     const char *name,
+                     uint32_t new_cluster)
+{
+    uint32_t cluster = parent_cluster;
+
+    while (cluster < 0x0FFFFFF8)
+    {
+        uint32_t sector = cluster_to_sector(fs, cluster);
+
+        fat_dir_entry *dir =
+            (fat_dir_entry*)(fs->disk + sector * fs->bytes_per_sector);
+
+        uint32_t entries =
+            fs->bytes_per_sector / sizeof(fat_dir_entry);
+
+        for (uint32_t i = 0; i < entries; i++)
+        {
+            if (dir[i].name[0] == 0x00 || dir[i].name[0] == 0xE5)
+            {
+                memset(&dir[i], 0, sizeof(fat_dir_entry));
+                memset(dir[i].name, ' ', 11);
+                memcpy(dir[i].name, name, 11);
+
+                dir[i].attr = 0x10;
+                dir[i].first_cluster_high = new_cluster >> 16;
+                dir[i].first_cluster_low = new_cluster & 0xFFFF;
+
+                return;
+            }
+        }
+
+        cluster = fat_next_cluster(fs, cluster);
+    }
+}
+
+
+void fat32_init_directory(FileSystem *fs,
+                          uint32_t cluster,
+                          uint32_t parent)
+{
+    uint32_t sector = cluster_to_sector(fs, cluster);
+
+    uint8_t *buf = fs->disk + sector * fs->bytes_per_sector;
+
+    memset(buf, 0, fs->bytes_per_sector); // sectors_per_cluster = 1
+
+    fat_dir_entry *e = (fat_dir_entry*)buf;
+
+    // "."
+    memcpy(e[0].name, ".          ", 11);
+    e[0].attr = 0x10;
+    e[0].first_cluster_high = cluster >> 16;
+    e[0].first_cluster_low = cluster & 0xFFFF;
+
+    // ".."
+    memcpy(e[1].name, "..         ", 11);
+    e[1].attr = 0x10;
+    e[1].first_cluster_high = parent >> 16;
+    e[1].first_cluster_low = parent & 0xFFFF;
+}
+
+uint32_t fat32_find_free_cluster(void)
+{
+    printf("fat_size: %d\n", fs.fat_size);
+    printf("fat size 2: %d\n", fs.bytes_per_sector);
+
+    printf("sectors per cluster: %d\n", fs.sectors_per_cluster);
+    uint32_t fat_entries = (fs.fat_size * fs.bytes_per_sector) / 4;
+
+    uint32_t *fat = (uint32_t*)(fs.disk + fs.fat_start * fs.bytes_per_sector);
+
+    for (uint32_t cluster = 0; cluster < fat_entries; cluster++)
+    {
+
+        if ((fat[cluster] & 0x0FFFFFFF) == 0)
+        {
+             printf("cluster: %d\n", cluster);
+            return cluster;
+        }
+    }
+
+    return 0; // no free cluster
+}
+
+void cd_dir(uint32_t cluster_dir, const char * name)
+{
+        FileSystem * fileSystem = &fs;
+    uint32_t cluster = cluster_dir;
+
+    while (cluster < 0x0FFFFFF8)
+    {
+        uint32_t sector = cluster_to_sector(fileSystem, cluster);
+        // For each sector in this cluster
+        for (uint32_t s = 0; s < fileSystem->sectors_per_cluster; s++)
+        {
+            fat_dir_entry *dir = (fat_dir_entry*) (fileSystem->disk + (sector + s) * fileSystem->bytes_per_sector);
+
+            uint8_t entries_per_sector = fileSystem->bytes_per_sector / sizeof(fat_dir_entry);
+            // printf("sector: %d\n", entries_per_sector);
+
+            for (uint8_t i = 0; i < entries_per_sector; i++)
+            {
+                fat_dir_entry *e = &dir[i];
+
+                // End of directory
+                if (e->name[0] == 0x00)
+                    return NULL;
+
+                // Deleted entry
+                if ((uint8_t)e->name[0] == 0xE5)
+                    continue;
+                                // Long filename entry
+                if (e->attr == 0x0F)
+                    continue;
+
+                if (e->attr == 0x10)
+                {
+                    if (strc)
+                }
+            }
+        }
+
+        // Move to next cluster in directory
+        cluster = fat_next_cluster(fileSystem, cluster);
+    }
+}
+
+/// root -> [sys : [], test : [ file file file etc...]]
+void list_dir(uint32_t cluster_dir)
+{   
+    FileSystem * fileSystem = &fs;
+    uint32_t cluster = cluster_dir;
+
+    while (cluster < 0x0FFFFFF8)
+    {
+        uint32_t sector = cluster_to_sector(fileSystem, cluster);
+        // For each sector in this cluster
+        for (uint32_t s = 0; s < fileSystem->sectors_per_cluster; s++)
+        {
+            fat_dir_entry *dir = (fat_dir_entry*) (fileSystem->disk + (sector + s) * fileSystem->bytes_per_sector);
+
+            uint8_t entries_per_sector = fileSystem->bytes_per_sector / sizeof(fat_dir_entry);
+            // printf("sector: %d\n", entries_per_sector);
+
+            for (uint8_t i = 0; i < entries_per_sector; i++)
+            {
+                fat_dir_entry *e = &dir[i];
+
+                // End of directory
+                if (e->name[0] == 0x00)
+                    return NULL;
+
+                // Deleted entry
+                if ((uint8_t)e->name[0] == 0xE5)
+                    continue;
+                                // Long filename entry
+                if (e->attr == 0x0F)
+                    continue;
+
+                if (e->attr == 0x10)
+                {
+                    vga_print(e->name);
+                    vga_putc('\n');                   
+                }
+            }
+        }
+
+        // Move to next cluster in directory
+        cluster = fat_next_cluster(fileSystem, cluster);
+    }
+}
+
+void fat32_list(FileSystem *fs)
+{
+    uint32_t cluster = fs->root_cluster;
+
+    while (cluster < 0x0FFFFFF8)
+    {
+        uint32_t sector = cluster_to_sector(fs, cluster);
+        // For each sector in this cluster
+        for (uint32_t s = 0; s < fs->sectors_per_cluster; s++)
+        {
+            fat_dir_entry *dir = (fat_dir_entry*) (fs->disk + (sector + s) * fs->bytes_per_sector);
+
+            uint8_t entries_per_sector = fs->bytes_per_sector / sizeof(fat_dir_entry);
+            // printf("sector: %d\n", entries_per_sector);
+
+            for (uint8_t i = 0; i < entries_per_sector; i++)
+            {
+                fat_dir_entry *e = &dir[i];
+
+                // End of directory
+                if (e->name[0] == 0x00)
+                    return NULL;
+
+                // Deleted entry
+                if ((uint8_t)e->name[0] == 0xE5)
+                    continue;
+                                // Long filename entry
+                if (e->attr == 0x0F)
+                    continue;
+
+                if (e->attr == 0x10)
+                {
+                    vga_print(e->name);
+                    vga_putc('\n');                   
+                }
+            }
+        }
+
+        // Move to next cluster in directory
+        cluster = fat_next_cluster(fs, cluster);
+    }
+}
+
+
+void fat32_list_wrapper(void)
+{
+    fat32_list(&fs);
 }
 
 File* fs_open(FileSystem *fs, const char *name)
@@ -79,6 +319,8 @@ File* fs_open(FileSystem *fs, const char *name)
 
         printf("sector: %d\n", sector);
         printf("sectors per clusters: %d\n", fs->sectors_per_cluster);
+
+
         // clusers => [sector1, sector2, sector3, ....]
 
         // For each sector in this cluster
@@ -109,17 +351,12 @@ File* fs_open(FileSystem *fs, const char *name)
                 {
                     printf("Name: %s, not ename: %s\n", e->name, name);
                     File * f = malloc(sizeof(File));
-
                     uint32_t first_cluster = (e->first_cluster_high << 16) | e->first_cluster_low;
-
                     printf("Esize: %d\n", e->file_size);
-
                     f->first_cluster   = first_cluster;
                     f->current_cluster = first_cluster;
                     f->size            = e->file_size;
                     f->position        = 0;
-
-
 
                     return f;
                 }
@@ -199,10 +436,12 @@ void fs_init(uint64_t multibootinfo)
             fs.disk                = (uint8_t*)disk;
             fs.fat_start = bs->reserved_sectors;
             fs.data_start = bs->reserved_sectors + (bs->num_fats * bs->fat_size_32);
+
+            // Intialise current directory to keep track for shell;
+            current_cluster = fs.root_cluster;
         }   
     }
 }
-
 
 void pmm_init(uint64_t multibootinfo)
 {

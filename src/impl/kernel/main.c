@@ -15,6 +15,7 @@
 #include "x86_64/elf.h"
 #include "x86_64/mrs.h"
 #include "x86_64/syscall.h"
+#include "x86_64/shell.h"
 
 extern char __kernel_heap_start;
 extern char __kernel_heap_end;
@@ -95,13 +96,18 @@ void kernel_main(uint32_t magic, void * multibootinfo)
     // init_system();
     init_syscalls();
     init_cpu();
+    
+    wrapper();
+
+    vga_clear();
+
     // write_msr(0xC0000101, (uint64_t)&single_cpu);
     // init_cpu_gs((uint64_t) &single_cpu);
 
-    uint64_t data = read_gs_16();
-    printf("local cpu data addr: %x\n", data);
+    // uint64_t data = read_gs_16();
+    // printf("local cpu data addr: %x\n", data);
     
-    print_clear();
+    // print_clear();
      
     // uint64_t val = read_kernel_stack();
     
@@ -121,11 +127,12 @@ void kernel_main(uint32_t magic, void * multibootinfo)
     // ;
     //
 
-    // {
-    //     create_thread(kernel_process, 0x1000, 0xABCDEFFF);
-    //     start_user_process("USER    ELF");
-    //     start_scheduler();
-    // }
+    {
+        create_thread(shell, 0x1000, 0xDEEEEEED);
+        // create_thread(kernel_process, 0x1000, 0xABCDEFFF);
+        // start_user_process("USER    ELF");
+        start_scheduler();
+    }
 
 
     while (1)

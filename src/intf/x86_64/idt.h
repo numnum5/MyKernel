@@ -17,6 +17,8 @@
 extern void default_handler_wrapped();
 
 void idt_init(void);
+char tty_read(void);
+void read_line(char* buf, uint64_t max);
 
 struct idt_entry 
 {

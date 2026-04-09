@@ -58,14 +58,7 @@ int tty_head = 0;
 int tty_tail = 0;
 static int shift = 0;
 
-int strcmp(const char* a, const char* b)
-{
-    while (*a && (*a == *b)) {
-        a++;
-        b++;
-    }
-    return *(unsigned char*)a - *(unsigned char*)b;
-}
+
 
 int startswith(const char* str, const char* prefix)
 {
@@ -76,40 +69,51 @@ int startswith(const char* str, const char* prefix)
     return 1;
 }
 
-void shell_execute(char* cmd)
+char tty_read(void)
 {
-    if (strcmp(cmd, "help") == 0)
+    while (tty_head == tty_tail); // wait for input
+
+    char c = tty_buf[tty_tail];
+
+    tty_tail = (tty_tail + 1) % 256;
+    return c;
+}
+void read_line(char* buf, uint64_t max)
+{
+    uint64_t i = 0;
+
+    // 10 == 9 
+    while (i < max - 1)
     {
-        vga_print("Commands:\n");
-        vga_print(" help  - show commands\n");
-        vga_print(" clear - clear screen\n");
-        vga_print(" echo  - print text\n");
+        char c = tty_read();
+        if (c == '\n')
+        {
+            vga_putc('\n');
+            break;
+        }
+
+        if (c == '\b')
+        {
+            if (i > 0)
+            {
+                i--;
+                vga_putc('\b');
+                vga_putc(' ');
+                vga_putc('\b');
+            }
+            continue;
+        }
+
+        buf[i++] = c;
+        vga_putc(c); // echo
     }
-    else if (strcmp(cmd, "clear") == 0)
-    {
-        vga_clear();
-    }
-    else if (startswith(cmd, "echo "))
-    {
-        vga_print(cmd + 5);
-        vga_putc('\n');
-    }
-    else if (cmd[0] == 0)
-    {
-        // empty line
-    }
-    else
-    {
-        vga_print("Unknown command: ");
-        vga_print(cmd);
-        vga_putc('\n');
-    }
+    
+    buf[i] = 0;
 }
 
 void keyboard_handler()
 {
     out_port_B(0x20, 0x20); 
-    static bool is_extended = 0;
     uint8_t sc = ps2_read_scan_code();
 
     if (sc & 0x80)
@@ -122,34 +126,8 @@ void keyboard_handler()
     }
 
     char c = shift ? keymap_shift[sc] : keymap[sc];
-    if (!c) return;
-
-    // BACKSPACE
-    if (c == '\b')
-    {
-        if (tty_head != tty_tail)
-        {
-            tty_head = (tty_head - 1 + TTY_SIZE) % TTY_SIZE;
-            // remove visually
-            vga_putc('\b');
-            vga_putc(' ');
-            vga_putc('\b');
-        }
-        // out_port_B(0x20, 0x20);
+    if (!c)
         return;
-    }
-
-    if (c == '\n')
-    {
-        tty_buf[tty_head] = 0;
-        shell_execute(tty_buf);
-
-        tty_head = 0;
-        tty_tail = 0;
-
-        vga_print("\n> ");
-        return;
-    }
 
     int next = (tty_head + 1) % TTY_SIZE;
    
@@ -157,10 +135,7 @@ void keyboard_handler()
     {
         tty_buf[tty_head] = c;
         tty_head = next;
-        
     }
-
-    vga_putc(c);
 }
 
 void idt_init(void)
@@ -180,6 +155,8 @@ void idt_init(void)
     
     // out_port_B(0x21, 0xFF); // 11111110 → enable IRQ0 only
     // out_port_B(0x21, 0xFE); // 11111110 → enable IRQ0 only
+    // 1111 1100
+    //      8 4 2 0 A B D E 
     out_port_B(0x21, 0xFD);
     out_port_B(0xA1, 0xFF); // keep slave masked for now
 
