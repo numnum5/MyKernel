@@ -126,16 +126,10 @@ void keyboard_handler()
     }
 
     char c = shift ? keymap_shift[sc] : keymap[sc];
-    if (!c)
-        return;
+    if (!c) return;
 
-    int next = (tty_head + 1) % TTY_SIZE;
    
-    if (next != tty_tail)
-    {
-        tty_buf[tty_head] = c;
-        tty_head = next;
-    }
+    tty_buf[tty_head++ % TTY_SIZE] = c;
 }
 
 void idt_init(void)

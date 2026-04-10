@@ -2,6 +2,7 @@
 #include "x86_64/pmm.h"
 #include "x86_64/stdlib.h"
 #include "x86_64/paging.h"
+#include "x86_64/string.h"
 #include "print.h"
 
 static MemoryRegion * memoryRegions = NULL;
@@ -134,13 +135,13 @@ void fat32_init_directory(FileSystem *fs,
     fat_dir_entry *e = (fat_dir_entry*)buf;
 
     // "."
-    memcpy(e[0].name, ".          ", 11);
+    memcpy(e[0].name, ".", 11);
     e[0].attr = 0x10;
     e[0].first_cluster_high = cluster >> 16;
     e[0].first_cluster_low = cluster & 0xFFFF;
 
     // ".."
-    memcpy(e[1].name, "..         ", 11);
+    memcpy(e[1].name, "..", 11);
     e[1].attr = 0x10;
     e[1].first_cluster_high = parent >> 16;
     e[1].first_cluster_low = parent & 0xFFFF;
@@ -169,9 +170,12 @@ uint32_t fat32_find_free_cluster(void)
     return 0; // no free cluster
 }
 
+
+
+
 void cd_dir(uint32_t cluster_dir, const char * name)
 {
-        FileSystem * fileSystem = &fs;
+    FileSystem * fileSystem = &fs;
     uint32_t cluster = cluster_dir;
 
     while (cluster < 0x0FFFFFF8)
@@ -202,7 +206,10 @@ void cd_dir(uint32_t cluster_dir, const char * name)
 
                 if (e->attr == 0x10)
                 {
-                    if (strc)
+                    if (strcmp(e->name, name) == 0)
+                    {
+                        current_cluster = (e->first_cluster_high << 16) | e->first_cluster_low;
+                    }
                 }
             }
         }
@@ -211,6 +218,111 @@ void cd_dir(uint32_t cluster_dir, const char * name)
         cluster = fat_next_cluster(fileSystem, cluster);
     }
 }
+
+char * list_current_dir(uint32_t cluster_dir)
+{
+    static char name[13]; // 8.3 + null
+
+    // Root special case
+    if (cluster_dir == fs.root_cluster) {
+        strcpy(name, "");
+        return name;
+    }
+
+    uint32_t parent = search_entry(cluster_dir, "..");
+
+    // printf("%x\n", parent);
+    FileSystem * fileSystem = &fs;
+    uint32_t sector = cluster_to_sector(fileSystem, parent);
+
+
+    // // For each sector in this cluster
+    for (uint32_t s = 0; s < fileSystem->sectors_per_cluster; s++)
+    {
+        fat_dir_entry *dir = (fat_dir_entry*) (fileSystem->disk + (sector + s) * fileSystem->bytes_per_sector);
+    // }
+        uint8_t entries_per_sector = fileSystem->bytes_per_sector / sizeof(fat_dir_entry);
+        // printf("sector: %d\n", entries_per_sector);
+
+        for (uint8_t i = 0; i < entries_per_sector; i++)
+        {
+            fat_dir_entry *e = &dir[i];
+
+            // // End of directory
+            if (e->name[0] == 0x00)
+                continue;
+
+            // Deleted entry
+            if ((uint8_t)e->name[0] == 0xE5)
+                continue;
+            //                 // Long filename entry
+            if (e->attr == 0x0F)
+                continue;
+
+            if (e->attr == 0x10)
+            {
+                // vga_print(e->name);
+               uint32_t selected_cluster = (e->first_cluster_high << 16) | e->first_cluster_low;
+
+                if (selected_cluster == cluster_dir)
+                {
+                    strcpy(name, e->name);
+                    return name;
+                }              
+            }
+        }
+    }
+
+    return "?";
+}
+
+#define NO_ENTRY_ERR 0
+
+uint32_t search_entry(uint32_t cluster_dir, char * entry_name)
+{
+    FileSystem * fileSystem = &fs;
+    uint32_t sector = cluster_to_sector(fileSystem, cluster_dir);
+    // For each sector in this cluster
+    for (uint32_t s = 0; s < fileSystem->sectors_per_cluster; s++)
+    {
+        fat_dir_entry *dir = (fat_dir_entry*) (fileSystem->disk + (sector + s) * fileSystem->bytes_per_sector);
+
+        uint8_t entries_per_sector = fileSystem->bytes_per_sector / sizeof(fat_dir_entry);
+        // printf("sector: %d\n", entries_per_sector);
+
+        for (uint8_t i = 0; i < entries_per_sector; i++)
+        {
+            fat_dir_entry *e = &dir[i];
+
+            // End of directory
+            if (e->name[0] == 0x00)
+                continue;
+
+            // Deleted entry
+            if ((uint8_t)e->name[0] == 0xE5)
+                continue;
+                            // Long filename entry
+            if (e->attr == 0x0F)
+                continue;
+
+            if (e->attr == 0x10)
+            {
+
+                // vga_print(e->name);
+                if (strcmp(e->name, entry_name) == 0)
+                {
+                    uint32_t selected_cluster = (e->first_cluster_high << 16) | e->first_cluster_low;
+                    return selected_cluster;
+                }                
+            }
+        }
+    }
+
+    return NO_ENTRY_ERR;
+}
+
+
+
 
 /// root -> [sys : [], test : [ file file file etc...]]
 void list_dir(uint32_t cluster_dir)

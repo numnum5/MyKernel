@@ -5,15 +5,7 @@
 #include "x86_64/pmm.h"
 #include "x86_64/idt.h"
 extern uint32_t current_cluster;
-int strcmp2(const char *a, const char *b)
-{
-    while (*a && (*a == *b)) {
-        a++;
-        b++;
-    }
 
-    return (unsigned char)*a - (unsigned char)*b;
-}
 
 int split_by_space(char *str, char **argv, int max_args)
 {
@@ -49,33 +41,33 @@ void shell(void)
 {
     vga_clear();
     vga_print("Welcome to MyKernel\n");
+    
+    // search_entry()
+    
     char * argv[8];
-    int argc = split_by_space("ls -l e", argv, 8);
-  for (int i = 0; i < argc; i++)
-                    vga_print(argv[i]);
-    // printf("")
-
     char buf[256];
     
     while (1)
     {
+        char * curr_dir = list_current_dir(current_cluster);
+        vga_putc('~');
+        vga_print(curr_dir);
+        vga_print("$ ");
         read_line(buf, 256);
 
         uint8_t argc = split_by_space(buf, argv, 8);
 
         if (argc > 0) 
         {
-            if (strcmp2(argv[0], "ls") == 0) 
+            if (strcmp(argv[0], "ls") == 0) 
             {
                 list_dir(current_cluster);
             }
-            else if (strcmp2(argv[0], "cd") == 0) 
+            else if (strcmp(argv[0], "cd") == 0) 
             {
                 char * dir_name = argv[1];
-
-                vga_print(dir_name);
-
-                
+                vga_print(dir_name);     
+                cd_dir(current_cluster, dir_name)    ;       
             }
         //         vga_print("FUCKU");
         // //         // shell_help();

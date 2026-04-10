@@ -1,3 +1,4 @@
 #include "bool.h"
 #include <stdint.h>
-bool strcmp(const char* a, const char* b);
+int strcmp(const char *a, const char *b);
+void strcpy(char * dest, char * source);

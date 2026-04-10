@@ -174,6 +174,9 @@ void fat32_add_entry(FileSystem *fs,
                      uint32_t parent_cluster,
                      const char *name,
                      uint32_t new_cluster);
+uint32_t search_entry(uint32_t cluster_dir, char * entry_name);
+char * list_current_dir(uint32_t cluster_dir);
+void cd_dir(uint32_t cluster_dir, const char * name);
 void fat32_mkdir(uint32_t parent_cluster, const char *name);
 uint32_t cluster_to_sector(FileSystem *fs, uint32_t cluster);
 uint32_t fat_next_cluster(FileSystem *fs, uint32_t cluster);
