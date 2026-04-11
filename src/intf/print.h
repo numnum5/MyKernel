@@ -34,3 +34,5 @@ void print_uint64_bin(uint64_t value);
 void print_int(int64_t n);
 void printf(const char* format, ...);
 void vga_putc(char c);
+void vga_set_cursor(uint16_t row, uint16_t col);
+uint16_t vga_get_cursor(void);

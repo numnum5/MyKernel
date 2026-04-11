@@ -1,5 +1,6 @@
 #include "print.h"
 #include <stdarg.h>
+#include "bool.h"
 #define VIRT_BASE 0xffffffff80000000
 const static size_t NUM_COLS = 80;
 const static size_t NUM_ROWS = 25;
@@ -33,43 +34,12 @@ void print_clear() {
     for (size_t i = 0; i < NUM_ROWS; i++) {
         clear_row(i);
     }
-}
 
-void print_newline() {
     col = 0;
-
-    if (row < NUM_ROWS - 1) {
-        row++;
-        return;
-    }
-
-    for (size_t row = 1; row < NUM_ROWS; row++) {
-        for (size_t col = 0; col < NUM_COLS; col++) {
-            struct Char character = buffer[col + NUM_COLS * row];
-            buffer[col + NUM_COLS * (row - 1)] = character;
-        }
-    }
-
-    clear_row(NUM_ROWS - 1);
+    row = 0;
 }
 
-void print_char(char character) {
-    if (character == '\n') {
-        print_newline();
-        return;
-    }
 
-    if (col > NUM_COLS) {
-        print_newline();
-    }
-
-    buffer[col + NUM_COLS * row] = (struct Char) {
-        character: (uint8_t) character,
-        color: color,
-    };
-
-    col++;
-}
 
 void print_str(char* str) {
     for (size_t i = 0; 1; i++) {
@@ -107,14 +77,6 @@ void print_uint64_dec(uint64_t value) {
 }
 
 
-
-void vga_print(const char* str)
-{
-    while (*str)
-    {
-        vga_putc(*str++);
-    }
-}
 
 
 void printf(const char* format, ...) {
@@ -215,8 +177,20 @@ volatile uint16_t *vga = (uint16_t*)(0xB8000 + VIRT_BASE);
 #define VGA_HEIGHT 25
 int cursor_x = 0;
 int cursor_y = 0;
-
+bool tty_printing = false;
 uint8_t color2 = 0x07;
+
+
+void vga_print(const char* str)
+{
+     tty_printing = true;
+    while (*str)
+    {
+        vga_putc(*str++);
+    }
+     tty_printing = false;
+}
+
 
 void vga_clear()
 {
@@ -225,6 +199,7 @@ void vga_clear()
 
     cursor_x = 0;
     cursor_y = 0;
+    vga_set_cursor(cursor_y, cursor_x);
 }
 
 void vga_putc(char c)
@@ -233,6 +208,7 @@ void vga_putc(char c)
     if (c == '\n') {
         cursor_x = 0;
         cursor_y++;
+        vga_set_cursor(cursor_y, cursor_x);
         return;
     }
 
@@ -246,6 +222,7 @@ void vga_putc(char c)
         }
 
         vga[cursor_y * VGA_WIDTH + cursor_x] = ' ' | (color << 8);
+        vga_set_cursor(cursor_y, cursor_x);
         return;
     }
 
@@ -277,6 +254,56 @@ void vga_putc(char c)
 
         cursor_y = VGA_HEIGHT - 1;
     }
+
+    vga_set_cursor(cursor_y, cursor_x);
+}
+
+void print_newline() {
+    col = 0;
+
+    if (row < NUM_ROWS - 1) {
+        row++;
+        return;
+    }
+
+    for (size_t row = 1; row < NUM_ROWS; row++) {
+        for (size_t col = 0; col < NUM_COLS; col++) {
+            struct Char character = buffer[col + NUM_COLS * row];
+            buffer[col + NUM_COLS * (row - 1)] = character;
+        }
+    }
+    clear_row(NUM_ROWS - 1);
+}
+
+void print_char(char character) {
+    if (character == '\n') {
+        print_newline();
+        vga_set_cursor(row, col);
+        return;
+    }
+
+    if (character == '\b')
+    {
+        buffer[col + NUM_COLS * row] = (struct Char) {
+            character: ' ',
+            color: color,
+        };
+        col--;
+        vga_set_cursor(row, col);
+        return;
+    }
+
+    if (col > NUM_COLS) {
+        print_newline();
+    }
+
+    buffer[col + NUM_COLS * row] = (struct Char) {
+        character: (uint8_t) character,
+        color: color,
+    };
+    
+    col++;
+    vga_set_cursor(row, col);
 }
 
 void print_uint64_bin(uint64_t value) {
@@ -290,4 +317,28 @@ void print_uint64_bin(uint64_t value) {
     for (size_t i = 64; i > 0; i--) {
         print_char(buffer[i - 1]);
     }
+}
+
+void vga_set_cursor(uint16_t row, uint16_t col)
+{
+    uint16_t pos = row * 80 + col;
+
+    out_port_B(0x3D4, 0x0F);        // low byte
+    out_port_B(0x3D5, (uint8_t)(pos & 0xFF));
+
+    out_port_B(0x3D4, 0x0E);        // high byte
+    out_port_B(0x3D5, (uint8_t)((pos >> 8) & 0xFF));
+}
+
+uint16_t vga_get_cursor(void)
+{
+    uint16_t pos = 0;
+
+    out_port_B(0x3D4, 0x0F);
+    pos |= port_inb(0x3D5);
+
+    out_port_B(0x3D4, 0x0E);
+    pos |= ((uint16_t)port_inb(0x3D5)) << 8;
+
+    return pos;
 }

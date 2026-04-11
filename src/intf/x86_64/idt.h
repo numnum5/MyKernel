@@ -18,6 +18,9 @@ extern void default_handler_wrapped();
 
 void idt_init(void);
 char tty_read(void);
+
+void tty_readline(char * buf, uint64_t size);
+void vga_enable_cursor();
 void read_line(char* buf, uint64_t max);
 
 struct idt_entry 

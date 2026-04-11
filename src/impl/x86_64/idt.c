@@ -78,39 +78,52 @@ char tty_read(void)
     tty_tail = (tty_tail + 1) % 256;
     return c;
 }
-void read_line(char* buf, uint64_t max)
+int tty_pos = 0;
+bool tty_currently_reading = false;
+
+void tty_readline(char * buf, uint64_t size)
 {
+    tty_currently_reading = true;
+
+    while (tty_currently_reading)
+        asm volatile("hlt");   // wait for keyboard interrupt
+
+    // copy result
     uint64_t i = 0;
-
-    // 10 == 9 
-    while (i < max - 1)
-    {
-        char c = tty_read();
-        if (c == '\n')
-        {
-            vga_putc('\n');
-            break;
-        }
-
-        if (c == '\b')
-        {
-            if (i > 0)
-            {
-                i--;
-                vga_putc('\b');
-                vga_putc(' ');
-                vga_putc('\b');
-            }
-            continue;
-        }
-
-        buf[i++] = c;
-        vga_putc(c); // echo
+    while (tty_buf[i] && i < size - 1) {
+        buf[i] = tty_buf[i];
+        i++;
     }
-    
     buf[i] = 0;
 }
 
+void tty_handle_char(char c)
+{
+    // vga_putc(c);
+    if (c == '\n') {
+        tty_buf[tty_pos] = 0;
+        tty_pos = 0;
+        tty_currently_reading = false;
+        return;
+    }
+
+    if (c == '\b') { // backspace
+        if (tty_pos > 0) {
+            tty_pos--;
+            print_char('\b');
+            print_char(' ');
+            print_char('\b');
+        }
+        return;
+    }
+
+    if (tty_pos < sizeof(tty_buf) - 1) {
+        tty_buf[tty_pos++] = c;
+        print_char(c);
+    }
+}
+
+extern bool tty_printing;
 void keyboard_handler()
 {
     out_port_B(0x20, 0x20); 
@@ -128,8 +141,20 @@ void keyboard_handler()
     char c = shift ? keymap_shift[sc] : keymap[sc];
     if (!c) return;
 
-   
-    tty_buf[tty_head++ % TTY_SIZE] = c;
+
+    if (tty_currently_reading)
+        tty_handle_char(c);
+}
+
+
+
+void vga_enable_cursor(void)
+{
+    out_port_B(0x3D4, 0x0A);
+    out_port_B(0x3D5, 0);      // cursor start
+
+    out_port_B(0x3D4, 0x0B);
+    out_port_B(0x3D5, 15);     // cursor end
 }
 
 void idt_init(void)

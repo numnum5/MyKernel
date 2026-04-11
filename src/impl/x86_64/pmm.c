@@ -358,8 +358,8 @@ void list_dir(uint32_t cluster_dir)
 
                 if (e->attr == 0x10)
                 {
-                    vga_print(e->name);
-                    vga_putc('\n');                   
+                    printf(e->name);
+                    print_char('\n');                   
                 }
             }
         }
