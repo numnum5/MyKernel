@@ -68,7 +68,7 @@ section .text
 global gpf_handler
 
 isr_common:
-    ; --- Save general purpose registers ---
+
     push rax
     push rbx
     push rcx
@@ -85,11 +85,9 @@ isr_common:
     push r14
     push r15
 
-    ; --- Pass pointer to interrupt frame ---
     mov rdi, rsp
     call gpf_handler_c
 
-    ; --- Restore registers ---
     pop r15
     pop r14
     pop r13
@@ -106,17 +104,14 @@ isr_common:
     pop rbx
     pop rax
 
-    ; --- Remove int_no + err_code ---
     add rsp, 16
 
     iretq
 
 
 gpf_handler:
-    cli                     ; Disable interrupts
+    cli                 
 
-; --- Save general purpose registers ---
-    ; save general-purpose registers
     push rax
     push rbx
     push rcx
@@ -137,7 +132,6 @@ gpf_handler:
     mov rdi, rsp
     call gpf_handler_c
 
-    ; restore general-purpose registers
     pop r15
     pop r14
     pop r13
@@ -156,4 +150,3 @@ gpf_handler:
     
     iretq
 
-    ; --- Infinite loop ---

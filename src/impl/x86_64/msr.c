@@ -27,6 +27,6 @@ void init_scheduler_msr()
     write_msr(0xC0000081, read_msr(0xC0000081) | ((uint64_t) 0x8 << 32));
     write_msr(0xC0000081, read_msr(0xC0000081) | ((uint64_t) 0x18 << 48));
     write_msr(0xC0000082, (uint64_t) syscall_entry); // Start execution at the syscall stub when a syscall occurs
-    write_msr(0xC0000084, 0); // Mask nothing
-    write_msr(0xC0000080, read_msr(0xC0000080) | 1); // Set the syscall enable bit
+    write_msr(0xC0000084, 0); 
+    write_msr(0xC0000080, read_msr(0xC0000080) | 1); 
 }

@@ -43,7 +43,7 @@ static const char keymap[128] = {
     '\t','q','w','e','r','t','y','u','i','o','p','[',']','\n',
     0,'a','s','d','f','g','h','j','k','l',';','\'','`',
     0,'\\','z','x','c','v','b','n','m',',','.','/',0,
-    '*',0,' '   // <-- added entries up to 0x39
+    '*',0,' ' 
 };
 
 static const char keymap_shift[128] = {
@@ -51,14 +51,12 @@ static const char keymap_shift[128] = {
     '\t','Q','W','E','R','T','Y','U','I','O','P','{','}','\n',
     0,'A','S','D','F','G','H','J','K','L',':','"','~',
     0,'|','Z','X','C','V','B','N','M','<','>','?',0,
-    '*',0,' '   // <-- added entries up to 0x39
+    '*',0,' ' 
 };
 char tty_buf[TTY_SIZE];
 int tty_head = 0;
 int tty_tail = 0;
 static int shift = 0;
-
-
 
 int startswith(const char* str, const char* prefix)
 {
@@ -71,7 +69,7 @@ int startswith(const char* str, const char* prefix)
 
 char tty_read(void)
 {
-    while (tty_head == tty_tail); // wait for input
+    while (tty_head == tty_tail); 
 
     char c = tty_buf[tty_tail];
 
@@ -86,9 +84,8 @@ void tty_readline(char * buf, uint64_t size)
     tty_currently_reading = true;
 
     while (tty_currently_reading)
-        asm volatile("hlt");   // wait for keyboard interrupt
+        asm volatile("hlt");   
 
-    // copy result
     uint64_t i = 0;
     while (tty_buf[i] && i < size - 1) {
         buf[i] = tty_buf[i];
@@ -107,7 +104,7 @@ void tty_handle_char(char c)
         return;
     }
 
-    if (c == '\b') { // backspace
+    if (c == '\b') {
         if (tty_pos > 0) {
             tty_pos--;
             print_char('\b');
@@ -151,38 +148,31 @@ void keyboard_handler()
 void vga_enable_cursor(void)
 {
     out_port_B(0x3D4, 0x0A);
-    out_port_B(0x3D5, 0);      // cursor start
+    out_port_B(0x3D5, 0);      
 
     out_port_B(0x3D4, 0x0B);
-    out_port_B(0x3D5, 15);     // cursor end
+    out_port_B(0x3D5, 15);   
 }
 
 void idt_init(void)
 {
-    out_port_B(0x20, 0x11); // ICW1 master
-    out_port_B(0xA0, 0x11); // ICW1 slave
+    out_port_B(0x20, 0x11); 
+    out_port_B(0xA0, 0x11); 
 
-    out_port_B(0x21, 0x20); // ICW2 master → offset 32
-    out_port_B(0xA1, 0x28); // ICW2 slave  → offset 40
+    out_port_B(0x21, 0x20); 
+    out_port_B(0xA1, 0x28);
 
-    out_port_B(0x21,0x04);  // ICW3 master (slave at IRQ2)
-    out_port_B(0xA1,0x02);  // ICW3 slave (cascade identity)
+    out_port_B(0x21,0x04);  
+    out_port_B(0xA1,0x02);  
 
-    out_port_B(0x21, 0x01); // ICW4 master
-    out_port_B(0xA1, 0x01); // ICW4 slave
-
-    
-    // out_port_B(0x21, 0xFF); // 11111110 → enable IRQ0 only
-    // out_port_B(0x21, 0xFE); // 11111110 → enable IRQ0 only
-    // 1111 1100
-    //      8 4 2 0 A B D E 
+    out_port_B(0x21, 0x01); 
+    out_port_B(0xA1, 0x01);
     out_port_B(0x21, 0xFD);
-    out_port_B(0xA1, 0xFF); // keep slave masked for now
+    out_port_B(0xA1, 0xFF); 
 
     idt_ptr.limit = (sizeof(struct idt_entry) * 256) - 1;
 	idt_ptr.base = (uint64_t) &idt_entries;
 
-// Before setting specific gates:
     extern void* isr_table[32];
 
     for (uint16_t i = 0; i < 32; i++) 
@@ -190,7 +180,6 @@ void idt_init(void)
         set_idt_gate(i, isr_table[i], 0x08, 0x8E);
     }
 
-    // set_idt_gate(32, (uint64_t) scheduler_yield, 0x08, 0x8E);
     set_idt_gate(0x21, (uint64_t) keyboard_handler_wrapped, 0x08, 0x8E);
 
     for (uint16_t i = 34; i < 256; i++) 

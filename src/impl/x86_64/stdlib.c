@@ -40,7 +40,6 @@ void free(void * ptr)
 
 void* memcpy(void* dest, const void* src, size_t n) 
 {
-    // Cast to char* so we can perform pointer arithmetic byte-by-byte
     char* d = (char*)dest;
     const char* s = (const char*)src;
 

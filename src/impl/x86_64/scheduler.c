@@ -23,7 +23,6 @@ void print_thread(Thread * thread){
 
 Thread * schedule()
 {
-    // Traverse the queue and print each element
     Thread * thread = dequeue(threads);
     while (thread != NULL & thread->status != SLEEPING)
     {
@@ -231,7 +230,7 @@ void sleep(uint64_t ms)
 void start_first_task(uint64_t *frame)
 {
     asm volatile (
-        "mov %0, %%rsp;"   // load prepared stack
+        "mov %0, %%rsp;"  
         "iretq;"
         :
         : "r"(frame)

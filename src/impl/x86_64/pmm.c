@@ -439,6 +439,7 @@ void list_dir(uint32_t cluster_dir)
 
                 if (e->attr == 0x10)
                 {
+                    print_set_color(PRINT_COLOR_YELLOW, PRINT_COLOR_BLACK);
                     printf(e->name);
                     print_char('\n');                   
                 }

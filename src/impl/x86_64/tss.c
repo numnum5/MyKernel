@@ -23,7 +23,7 @@ void tss_init(void)
     descriptor->limit_low = limit & 0xFFFF;
     descriptor->base_low = tss_addr & 0xFFFF;
     descriptor->base_mid = (tss_addr >> 16) & 0xFF;
-    descriptor->type = 0x89; // Present, Executable (TSS type), Ring 0
+    descriptor->type = 0x89; // Ring 0
     descriptor->limit_high_flags = ((limit >> 16) & 0x0F);
     descriptor->base_high = (tss_addr >> 24) & 0xFF;
     descriptor->base_upper = (tss_addr >> 32) & 0xFFFFFFFF;

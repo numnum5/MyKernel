@@ -56,7 +56,7 @@ void pic_remap() {
 	port_outb(PORT_PIC2_DATA, ICW4_MODE_8086);
 	port_wait();
 	
-	// Mask (ignore) all interrupts
+
 	port_outb(PORT_PIC1_DATA, 0xFF);
 	port_wait();
 	port_outb(PORT_PIC2_DATA, 0xFF);
@@ -71,7 +71,7 @@ void pic_remap() {
 	port_outb(PORT_PIC2_DATA, mask_slave);
 	port_wait();
 	
-	// Wait for outstanding interrupts to clear
+	
 	pic_eoi_master();
 	pic_eoi_slave();
 }
