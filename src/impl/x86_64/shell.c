@@ -37,6 +37,38 @@ int split_by_space(char *str, char **argv, int max_args)
     return argc;
 }
 
+
+void pwd_print(uint8_t index, char ** names)
+{
+    for(int8_t i = index - 1; i >= 0; i--)
+    {
+        if (i != 0)
+        {
+            printf("/%s", names[i]);
+        }
+        else
+        {
+            printf("/%s\n", names[i]);   
+        }
+    }
+}
+
+void print_dirs(uint8_t index, char ** names)
+{
+
+    // printf("index: %d\n", index);
+    if (index == 0)
+    {
+        printf("%s", names[0]);
+        return;
+    }
+
+    for(int8_t i = index - 1; i >= 0; i--)
+    {
+        printf("/%s", names[i]);
+  
+    }
+}
 void shell(void)
 {
     vga_enable_cursor();
@@ -46,15 +78,18 @@ void shell(void)
     // search_entry()
     char * argv[8];
     char buf[256];
+
+    char * dir_names[20];
     while (1)
     {
-        char * curr_dir = list_current_dir(current_cluster);
-        print_char('~');
-        printf(curr_dir);
+        uint8_t index = pwd(current_cluster, dir_names);
+        print_char('~');        
+        print_dirs(index, dir_names);
         printf("$ ");
         tty_readline(buf, 256);
         print_char('\n');
         uint8_t argc = split_by_space(buf, argv, 8);
+        
         if (argc > 0) 
         {
             if (strcmp(argv[0], "ls") == 0) 
@@ -63,9 +98,21 @@ void shell(void)
             }
             else if (strcmp(argv[0], "cd") == 0) 
             {
-                char * dir_name = argv[1];
-                // vga_print(dir_name);     
+                char * dir_name = argv[1]; 
                 cd_dir(current_cluster, dir_name)    ;       
+            }
+            else if (strcmp(argv[0], "mkdir") == 0)
+            {
+                char * dir_name = argv[1];
+
+                fat32_mkdir(current_cluster, dir_name);
+            }
+            else if (strcmp(argv[0], "pwd") == 0)
+            {
+                // char * dir_name = argv[1];
+                // uint8_t index = 0;
+                uint8_t index = pwd(current_cluster, dir_names);
+                pwd_print(index, dir_names);
             }
         }
     };

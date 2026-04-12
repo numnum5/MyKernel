@@ -73,6 +73,7 @@ void wrapper(void)
 {
     fat32_mkdir(fs.root_cluster, "test");
     fat32_mkdir(fs.root_cluster, "sys");
+    // fat32_mkdir(fs.root_cluster, "sys");
 }
 
 void fat32_mkdir(uint32_t parent_cluster, const char *name)
@@ -83,6 +84,7 @@ void fat32_mkdir(uint32_t parent_cluster, const char *name)
 
     fat32_add_entry(&fs, parent_cluster, name, new_cluster);
 }
+
 
 void fat32_add_entry(FileSystem *fs,
                      uint32_t parent_cluster,
@@ -128,6 +130,8 @@ void fat32_init_directory(FileSystem *fs,
 {
     uint32_t sector = cluster_to_sector(fs, cluster);
 
+
+    
     uint8_t *buf = fs->disk + sector * fs->bytes_per_sector;
 
     memset(buf, 0, fs->bytes_per_sector); // sectors_per_cluster = 1
@@ -149,10 +153,10 @@ void fat32_init_directory(FileSystem *fs,
 
 uint32_t fat32_find_free_cluster(void)
 {
-    printf("fat_size: %d\n", fs.fat_size);
-    printf("fat size 2: %d\n", fs.bytes_per_sector);
+    // printf("fat_size: %d\n", fs.fat_size);
+    // printf("fat size 2: %d\n", fs.bytes_per_sector);
 
-    printf("sectors per cluster: %d\n", fs.sectors_per_cluster);
+    // printf("sectors per cluster: %d\n", fs.sectors_per_cluster);
     uint32_t fat_entries = (fs.fat_size * fs.bytes_per_sector) / 4;
 
     uint32_t *fat = (uint32_t*)(fs.disk + fs.fat_start * fs.bytes_per_sector);
@@ -162,7 +166,8 @@ uint32_t fat32_find_free_cluster(void)
 
         if ((fat[cluster] & 0x0FFFFFFF) == 0)
         {
-             printf("cluster: %d\n", cluster);
+            fat[cluster] = 0x0FFFFFFF;
+            // printf("cluster: %d\n", cluster);
             return cluster;
         }
     }
@@ -205,10 +210,15 @@ void cd_dir(uint32_t cluster_dir, const char * name)
                     continue;
 
                 if (e->attr == 0x10)
-                {
+                {   
+
+                    
                     if (strcmp(e->name, name) == 0)
-                    {
+                    {   
+            
                         current_cluster = (e->first_cluster_high << 16) | e->first_cluster_low;
+                        // printf("Names: %s, %s, Cluster: %x\n", e->name, name, current_cluster);
+                        // printf("%x\n", current_cluster);
                     }
                 }
             }
@@ -217,6 +227,75 @@ void cd_dir(uint32_t cluster_dir, const char * name)
         // Move to next cluster in directory
         cluster = fat_next_cluster(fileSystem, cluster);
     }
+}
+
+
+char * get_dir_name(uint32_t parent, uint32_t child)
+{
+    uint32_t sector = cluster_to_sector(&fs, parent);
+    for (uint32_t s = 0; s < fs.sectors_per_cluster; s++)
+    {
+        fat_dir_entry *dir = (fat_dir_entry*) (fs.disk + (sector + s) * fs.bytes_per_sector);
+
+        uint8_t entries_per_sector = fs.bytes_per_sector / sizeof(fat_dir_entry);
+
+        for (uint8_t i = 0; i < entries_per_sector; i++)
+        {
+            fat_dir_entry *e = &dir[i];
+
+            // // End of directory
+            if (e->name[0] == 0x00)
+                continue;
+
+            // Deleted entry
+            if ((uint8_t)e->name[0] == 0xE5)
+                continue;
+            //                 // Long filename entry
+            if (e->attr == 0x0F)
+                continue;
+
+            if (e->attr == 0x10)
+            {
+                // vga_print(e->name);
+                uint32_t selected_cluster = (e->first_cluster_high << 16) | e->first_cluster_low;
+
+                if (selected_cluster == child)
+                {
+                    char * dir_name = malloc(sizeof(char) * 13);
+                    strcpy(dir_name, e->name);
+                    return dir_name;
+                }              
+            }
+        }
+    }
+
+    return NULL;
+}
+
+uint8_t pwd(uint32_t cluster_dir, char ** names)
+{
+ 
+    uint8_t index = 0;
+    if (cluster_dir == fs.root_cluster) {
+        names[index] = malloc(sizeof(char) * 13);
+        strcpy(names[index], "");
+        return index;
+    }
+
+    uint32_t child = cluster_dir;;
+    uint32_t parent;
+
+    do
+    {
+        parent = search_entry(child, "..");
+        char * dir_name = get_dir_name(parent, child); 
+        names[index++] = dir_name;
+        child = parent;
+    }
+    while(parent != fs.root_cluster);
+
+
+    return index;
 }
 
 char * list_current_dir(uint32_t cluster_dir)
@@ -282,7 +361,9 @@ uint32_t search_entry(uint32_t cluster_dir, char * entry_name)
 {
     FileSystem * fileSystem = &fs;
     uint32_t sector = cluster_to_sector(fileSystem, cluster_dir);
+    
     // For each sector in this cluster
+
     for (uint32_t s = 0; s < fileSystem->sectors_per_cluster; s++)
     {
         fat_dir_entry *dir = (fat_dir_entry*) (fileSystem->disk + (sector + s) * fileSystem->bytes_per_sector);

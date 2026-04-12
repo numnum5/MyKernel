@@ -178,6 +178,7 @@ uint32_t search_entry(uint32_t cluster_dir, char * entry_name);
 char * list_current_dir(uint32_t cluster_dir);
 void cd_dir(uint32_t cluster_dir, const char * name);
 void fat32_mkdir(uint32_t parent_cluster, const char *name);
+uint8_t pwd(uint32_t cluster_dir, char ** names);
 uint32_t cluster_to_sector(FileSystem *fs, uint32_t cluster);
 uint32_t fat_next_cluster(FileSystem *fs, uint32_t cluster);
 uint32_t fs_read(FileSystem *fs, File *f, void *buffer, uint32_t size);

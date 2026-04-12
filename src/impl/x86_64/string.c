@@ -11,6 +11,18 @@ int strcmp(const char *a, const char *b)
 }
 
 
+size_t strlen(char * string)
+{
+    size_t counter = 0;
+    while(*string)
+    {
+        counter++;
+        string++;
+    }
+
+    return counter;
+}
+
 void strcpy(char * dest, char * source)
 {
     while(*source)

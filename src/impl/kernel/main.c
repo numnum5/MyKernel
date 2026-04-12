@@ -99,8 +99,6 @@ void kernel_main(uint32_t magic, void * multibootinfo)
     
     wrapper();
 
-    vga_clear();
-
     // write_msr(0xC0000101, (uint64_t)&single_cpu);
     // init_cpu_gs((uint64_t) &single_cpu);
 
