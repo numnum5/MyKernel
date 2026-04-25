@@ -21,4 +21,5 @@ Checklist:
 ## Emulation
  - `qemu-system-x86_64 -cdrom dist/x86_64/kernel.iso`
 
-
+## Shell:
+<img width="1442" height="922" alt="image" src="https://github.com/user-attachments/assets/8ad82958-1be4-4a6b-b42a-9cb0109df35a" />
